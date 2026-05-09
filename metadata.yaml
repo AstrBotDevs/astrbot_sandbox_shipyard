@@ -1,4 +1,4 @@
-name: astrbot-sandbox-shipyard
+name: astrbot_sandbox_shipyard
 author: AstrBot Team
 desc: Shipyard sandbox runtime provider for AstrBot.
 version: 0.1.0

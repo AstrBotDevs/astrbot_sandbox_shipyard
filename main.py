@@ -8,7 +8,7 @@ from .provider import ShipyardSandboxProvider
 
 
 @register(
-    "astrbot-sandbox-shipyard",
+    "astrbot_sandbox_shipyard",
     "AstrBot Team",
     "Shipyard sandbox runtime provider for AstrBot",
     "0.1.0",
