@@ -16,7 +16,7 @@
 ## 依赖要求
 
 - 需要使用已经支持外部 sandbox provider 插件的 AstrBot 版本。
-- 依赖 `requirements.txt` 中的 `shipyard`。
+- 依赖 `requirements.txt` 中的 `shipyard-python-sdk`。
 - 需要可访问的 Shipyard 服务地址。
 - 需要有效的 Shipyard Access Token。
 

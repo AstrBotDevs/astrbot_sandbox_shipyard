@@ -1,1 +1,1 @@
-shipyard
+shipyard-python-sdk

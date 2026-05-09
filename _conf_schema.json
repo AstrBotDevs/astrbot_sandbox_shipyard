@@ -1,22 +1,26 @@
 {
   "shipyard_endpoint": {
-    "description": "Shipyard API Endpoint",
+    "description": "Shipyard API 地址",
     "type": "string",
-    "hint": "Shipyard service API endpoint."
+    "default": "",
+    "hint": "Shipyard 服务的 API 地址。"
   },
   "shipyard_access_token": {
-    "description": "Shipyard Access Token",
+    "description": "Shipyard 访问令牌",
     "type": "string",
-    "hint": "Access token for Shipyard."
+    "default": "",
+    "hint": "用于访问 Shipyard 服务的访问令牌。"
   },
   "shipyard_ttl": {
-    "description": "Shipyard Session TTL",
+    "description": "Shipyard 会话存活时间",
     "type": "int",
-    "hint": "Shipyard session TTL in seconds."
+    "default": 3600,
+    "hint": "Shipyard 会话的生存时间，单位为秒。默认值为 3600。"
   },
   "shipyard_max_sessions": {
-    "description": "Shipyard Max Sessions",
+    "description": "Shipyard 最大会话数",
     "type": "int",
-    "hint": "Maximum Shipyard sessions."
+    "default": 10,
+    "hint": "一个 Shipyard 实例允许承载的最大会话数量。默认值为 10。"
   }
 }

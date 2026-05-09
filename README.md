@@ -16,7 +16,7 @@ It is intended for users who want a classic remote sandbox with shell, Python, a
 ## Requirements
 
 - An AstrBot build that supports external sandbox provider plugins.
-- The Python dependency from `requirements.txt`: `shipyard`.
+- The Python dependency from `requirements.txt`: `shipyard-python-sdk`.
 - A reachable Shipyard service endpoint.
 - A valid Shipyard access token.
 
