@@ -1,0 +1,22 @@
+{
+  "shipyard_endpoint": {
+    "description": "Shipyard API Endpoint",
+    "type": "string",
+    "hint": "Shipyard service API endpoint."
+  },
+  "shipyard_access_token": {
+    "description": "Shipyard Access Token",
+    "type": "string",
+    "hint": "Access token for Shipyard."
+  },
+  "shipyard_ttl": {
+    "description": "Shipyard Session TTL",
+    "type": "int",
+    "hint": "Shipyard session TTL in seconds."
+  },
+  "shipyard_max_sessions": {
+    "description": "Shipyard Max Sessions",
+    "type": "int",
+    "hint": "Maximum Shipyard sessions."
+  }
+}

@@ -1,0 +1,5 @@
+name: astrbot-sandbox-shipyard
+author: AstrBot Team
+desc: Shipyard sandbox runtime provider for AstrBot.
+version: 0.1.0
+repo: https://github.com/zouyonghe/astrbot_sandbox_shipyard
