@@ -16,8 +16,7 @@ from .provider import ShipyardSandboxProvider
 class ShipyardSandboxRuntimePlugin(Star):
     def __init__(self, context: Context, config=None) -> None:
         super().__init__(context)
-        self.provider = ShipyardSandboxProvider()
-        self.provider.plugin_config = config or {}
+        self.provider = ShipyardSandboxProvider(plugin_config=config)
         register_sandbox_provider(self.provider, replace=True)
 
     async def terminate(self) -> None:

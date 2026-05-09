@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
+from typing import Any
 
+from astrbot.api import logger
 from astrbot.core.computer.booters.base import ComputerBooter
 from astrbot.core.star.context import Context
 
@@ -16,26 +18,38 @@ class ShipyardSandboxProvider:
     capabilities = {"shell", "python", "filesystem"}
     tool_names: set[str] = set()
 
-    def __init__(self, boot_hook: BootHook | None = None) -> None:
+    def __init__(
+        self,
+        boot_hook: BootHook | None = None,
+        *,
+        plugin_config: Mapping[str, Any] | None = None,
+    ) -> None:
+        self.plugin_config: dict[str, Any] = (
+            dict(plugin_config) if plugin_config is not None else {}
+        )
         self._boot_hook = boot_hook
 
-    def build_create_config(self, context: Context, session_id: str) -> dict:
+    def _merged_sandbox_config(self, context: Context, session_id: str) -> dict:
+        """Return sandbox config with plugin_config as base and user settings overriding."""
         config = context.get_config(umo=session_id)
+        merged = dict(self.plugin_config)
         sandbox_cfg = config.get("provider_settings", {}).get("sandbox", {})
-        plugin_cfg = getattr(self, "plugin_config", None) or {}
+        if isinstance(sandbox_cfg, dict):
+            merged.update(sandbox_cfg)
+        else:
+            logger.warning(
+                "[Computer] Expected dict for provider_settings.sandbox, got %s. Ignoring.",
+                type(sandbox_cfg).__name__,
+            )
+        return merged
+
+    def build_create_config(self, context: Context, session_id: str) -> dict:
+        merged = self._merged_sandbox_config(context, session_id)
         return {
-            "endpoint_url": sandbox_cfg.get(
-                "shipyard_endpoint", plugin_cfg.get("shipyard_endpoint", "")
-            ),
-            "access_token": sandbox_cfg.get(
-                "shipyard_access_token", plugin_cfg.get("shipyard_access_token", "")
-            ),
-            "ttl": sandbox_cfg.get(
-                "shipyard_ttl", plugin_cfg.get("shipyard_ttl", 3600)
-            ),
-            "session_num": sandbox_cfg.get(
-                "shipyard_max_sessions", plugin_cfg.get("shipyard_max_sessions", 10)
-            ),
+            "endpoint_url": merged.get("shipyard_endpoint", ""),
+            "access_token": merged.get("shipyard_access_token", ""),
+            "ttl": merged.get("shipyard_ttl", 3600),
+            "session_num": merged.get("shipyard_max_sessions", 10),
         }
 
     def build_connect_info(self, sandbox_name: str, config: dict) -> dict:
@@ -56,7 +70,6 @@ class ShipyardSandboxProvider:
             return await self._boot_hook(context, session_id, sandbox_id, config)
         client = ShipyardBooter(**config)
         await client.boot(uuid.uuid5(uuid.NAMESPACE_DNS, session_id).hex)
-        await client.sync_skills_to_sandbox()
         return client
 
     async def destroy_booter(self, booter: ComputerBooter, record: dict) -> None:
