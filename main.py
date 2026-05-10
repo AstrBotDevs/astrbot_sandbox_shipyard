@@ -21,5 +21,7 @@ class ShipyardSandboxRuntimePlugin(Star):
         register_sandbox_provider(self.provider, replace=True)
 
     async def terminate(self) -> None:
-        await cleanup_sandbox_provider(self.provider.provider_id)
-        detach_sandbox_provider(self.provider.provider_id)
+        try:
+            await cleanup_sandbox_provider(self.provider.provider_id)
+        finally:
+            detach_sandbox_provider(self.provider.provider_id)
