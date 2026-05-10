@@ -11,6 +11,7 @@ from astrbot.core.star.context import Context
 from .booters.shipyard import ShipyardBooter
 
 BootHook = Callable[[Context, str, str, dict], Awaitable[ComputerBooter]]
+DEFAULT_SHIPYARD_ENDPOINT = "http://127.0.0.1:8114"
 
 
 class ShipyardSandboxProvider:
@@ -45,8 +46,9 @@ class ShipyardSandboxProvider:
 
     def build_create_config(self, context: Context, session_id: str) -> dict:
         merged = self._merged_sandbox_config(context, session_id)
+        endpoint = str(merged.get("shipyard_endpoint") or "").strip()
         return {
-            "endpoint_url": merged.get("shipyard_endpoint", ""),
+            "endpoint_url": endpoint or DEFAULT_SHIPYARD_ENDPOINT,
             "access_token": merged.get("shipyard_access_token", ""),
             "ttl": merged.get("shipyard_ttl", 3600),
             "session_num": merged.get("shipyard_max_sessions", 10),
