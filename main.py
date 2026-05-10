@@ -1,3 +1,5 @@
+import asyncio
+
 from astrbot.api import logger
 from astrbot.api.star import Context, Star, register
 from astrbot.core.computer.computer_client import (
@@ -22,11 +24,16 @@ class ShipyardSandboxRuntimePlugin(Star):
         register_sandbox_provider(self.provider, replace=True)
 
     async def terminate(self) -> None:
-        provider_id = getattr(getattr(self, "provider", None), "provider_id", None)
+        provider = getattr(self, "provider", None)
+        if provider is None:
+            return
+        provider_id = getattr(provider, "provider_id", None)
         if not provider_id:
             return
         try:
             await cleanup_sandbox_provider(provider_id)
+        except asyncio.CancelledError:
+            raise
         except Exception:
             logger.warning(
                 "Shipyard sandbox provider cleanup failed during termination: provider=%s",
