@@ -10,7 +10,7 @@ from .provider import ShipyardSandboxProvider
 @register(
     "astrbot_sandbox_shipyard",
     "AstrBot Team",
-    "Shipyard sandbox runtime provider for AstrBot",
+    "为 AstrBot 提供 Shipyard 沙盒运行时。",
     "0.1.0",
 )
 class ShipyardSandboxRuntimePlugin(Star):
