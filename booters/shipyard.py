@@ -36,10 +36,61 @@ _SHIP_DELETE_TIMEOUT_S = 30
 
 
 def _build_shell_payload_from_attrs(value: Any) -> dict[str, Any]:
-    return {key: getattr(value, key) for key in _SHELL_RESULT_ATTRS if hasattr(value, key)}
+    return {
+        key: getattr(value, key) for key in _SHELL_RESULT_ATTRS if hasattr(value, key)
+    }
 
 
-async def _delete_ship_via_api(endpoint_url: str, access_token: str, ship_id: str) -> None:
+def _to_payload_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if is_dataclass(value) and not isinstance(value, type):
+        return asdict(value)
+    for method_name in ("model_dump", "dict"):
+        method = getattr(value, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            dumped = method()
+        except Exception:
+            dumped = None
+        if isinstance(dumped, dict):
+            return dict(dumped)
+    return _build_shell_payload_from_attrs(value)
+
+
+def _flatten_data_field(payload: dict[str, Any]) -> dict[str, Any]:
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return payload
+    merged = dict(payload)
+    merged.update(data)
+    return merged
+
+
+def _first(payload: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in payload:
+            return payload[key]
+    return None
+
+
+def _normalize_shell_aliases(payload: dict[str, Any]) -> dict[str, Any]:
+    stdout = _first(payload, "output", "stdout")
+    stderr = _first(payload, "error", "stderr")
+    exit_code = _first(payload, "exit_code", "return_code", "returncode")
+    if stdout is not None:
+        payload["stdout"] = stdout
+    if stderr is not None:
+        payload["stderr"] = stderr
+    if exit_code is not None:
+        payload["exit_code"] = exit_code
+    return payload
+
+
+async def _delete_ship_via_api(
+    endpoint_url: str, access_token: str, ship_id: str
+) -> None:
     headers = {"Authorization": f"Bearer {access_token}"}
     timeout = aiohttp.ClientTimeout(total=_SHIP_DELETE_TIMEOUT_S)
     async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
@@ -52,53 +103,9 @@ async def _delete_ship_via_api(endpoint_url: str, access_token: str, ship_id: st
 
 
 def _normalize_shell_result(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        payload = dict(value)
-    elif is_dataclass(value) and not isinstance(value, type):
-        payload = asdict(value)
-    elif hasattr(value, "model_dump"):
-        try:
-            dumped = value.model_dump()
-        except Exception:
-            dumped = None
-        if isinstance(dumped, dict):
-            payload = dict(dumped)
-        else:
-            payload = _build_shell_payload_from_attrs(value)
-    elif hasattr(value, "dict"):
-        try:
-            dumped = value.dict()
-        except Exception:
-            dumped = None
-        if isinstance(dumped, dict):
-            payload = dict(dumped)
-        else:
-            payload = _build_shell_payload_from_attrs(value)
-    else:
-        payload = _build_shell_payload_from_attrs(value)
-
-    data = payload.get("data")
-    if isinstance(data, dict):
-        merged = dict(payload)
-        merged.update(data)
-        payload = merged
-
-    stdout = payload.get("output") if "output" in payload else payload.get("stdout")
-    stderr = payload.get("error") if "error" in payload else payload.get("stderr")
-    exit_code = (
-        payload.get("exit_code")
-        if "exit_code" in payload
-        else payload.get("return_code")
-        if "return_code" in payload
-        else payload.get("returncode")
-    )
-    if stdout is not None:
-        payload["stdout"] = stdout
-    if stderr is not None:
-        payload["stderr"] = stderr
-    if exit_code is not None:
-        payload["exit_code"] = exit_code
-    return payload
+    payload = _to_payload_dict(value)
+    payload = _flatten_data_field(payload)
+    return _normalize_shell_aliases(payload)
 
 
 class ShipyardShellWrapper:

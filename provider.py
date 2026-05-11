@@ -32,10 +32,12 @@ def _normalize_shipyard_endpoint(endpoint: str) -> tuple[str, bool]:
     raw = (endpoint or "").strip() or DEFAULT_SHIPYARD_ENDPOINT
     parsed = urlparse(raw)
     if not parsed.scheme or not parsed.hostname:
+        logger.warning("[Shipyard] Invalid endpoint ignored: %s", raw)
         return raw.rstrip("/"), False
     try:
         port = parsed.port
     except ValueError:
+        logger.warning("[Shipyard] Invalid endpoint ignored: %s", raw)
         return raw.rstrip("/"), False
     netloc = parsed.hostname
     if port is not None:

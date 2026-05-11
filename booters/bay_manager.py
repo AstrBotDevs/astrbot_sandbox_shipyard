@@ -112,6 +112,10 @@ class ShipyardBayContainerManager:
         try:
             networks = await self._docker.networks.list()
         except Exception as exc:
+            if self._docker_network:
+                raise RuntimeError(
+                    f"Failed to list configured Docker network {network_name}"
+                ) from exc
             logger.warning("[Shipyard] Failed to list Docker networks: %s", exc)
             return
         for network in networks:
@@ -127,6 +131,10 @@ class ShipyardBayContainerManager:
             )
             logger.info("[Shipyard] Created Docker network: %s", network_name)
         except Exception as exc:
+            if self._docker_network:
+                raise RuntimeError(
+                    f"Failed to create configured Docker network {network_name}"
+                ) from exc
             logger.warning(
                 "[Shipyard] Failed to create Docker network %s: %s", network_name, exc
             )

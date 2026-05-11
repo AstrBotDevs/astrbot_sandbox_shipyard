@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from data.plugins.astrbot_sandbox_shipyard import main as plugin_main
+from data.plugins.astrbot_sandbox_shipyard import provider as shipyard_provider
 from data.plugins.astrbot_sandbox_shipyard.booters import shipyard as shipyard_booter
 from data.plugins.astrbot_sandbox_shipyard.booters.bay_manager import (
     ShipyardBayContainerManager,
@@ -114,13 +115,33 @@ def test_shipyard_provider_preserves_endpoint_path_when_normalizing():
     assert config["endpoint_url"] == "http://localhost:8156/api?token=1"
 
 
-def test_shipyard_provider_disables_auto_start_for_false_string():
+def test_shipyard_provider_warns_on_malformed_endpoint(monkeypatch):
+    warnings = []
+
+    def fake_warning(*args, **kwargs):
+        warnings.append((args, kwargs))
+
+    monkeypatch.setattr(shipyard_provider.logger, "warning", fake_warning)
     provider = ShipyardSandboxProvider()
     context = SimpleNamespace(
         get_config=lambda umo: {
             "provider_settings": {
-                "sandbox": {"shipyard_auto_start": "false"}
+                "sandbox": {"shipyard_endpoint": "http://localhost:notaport"}
             }
+        }
+    )
+
+    config = provider.build_create_config(context, "dashboard")
+
+    assert config["auto_start_bay"] is False
+    assert warnings
+
+
+def test_shipyard_provider_disables_auto_start_for_false_string():
+    provider = ShipyardSandboxProvider()
+    context = SimpleNamespace(
+        get_config=lambda umo: {
+            "provider_settings": {"sandbox": {"shipyard_auto_start": "false"}}
         }
     )
 
@@ -133,9 +154,7 @@ def test_shipyard_provider_disables_auto_start_for_unknown_string():
     provider = ShipyardSandboxProvider()
     context = SimpleNamespace(
         get_config=lambda umo: {
-            "provider_settings": {
-                "sandbox": {"shipyard_auto_start": "maybe"}
-            }
+            "provider_settings": {"sandbox": {"shipyard_auto_start": "maybe"}}
         }
     )
 
@@ -344,6 +363,46 @@ async def test_shipyard_bay_manager_creates_configured_docker_network_when_missi
     await manager._ensure_docker_network()
 
     assert calls == [("list", None), ("create_network", "shipyard")]
+
+
+@pytest.mark.asyncio
+async def test_shipyard_bay_manager_raises_when_configured_network_list_fails():
+    class FakeNetworks:
+        async def list(self):
+            raise RuntimeError("list failed")
+
+    manager = ShipyardBayContainerManager(
+        endpoint_url="http://shipyard:8156",
+        access_token="token",
+        docker_network="astrbot_network",
+    )
+    manager._docker = SimpleNamespace(networks=FakeNetworks())
+
+    with pytest.raises(RuntimeError, match="Failed to list configured Docker network"):
+        await manager._ensure_docker_network()
+
+
+@pytest.mark.asyncio
+async def test_shipyard_bay_manager_raises_when_configured_network_create_fails():
+    class FakeNetworks:
+        async def list(self):
+            return []
+
+        async def create(self, config):
+            del config
+            raise RuntimeError("create failed")
+
+    manager = ShipyardBayContainerManager(
+        endpoint_url="http://shipyard:8156",
+        access_token="token",
+        docker_network="astrbot_network",
+    )
+    manager._docker = SimpleNamespace(networks=FakeNetworks())
+
+    with pytest.raises(
+        RuntimeError, match="Failed to create configured Docker network"
+    ):
+        await manager._ensure_docker_network()
 
 
 @pytest.mark.asyncio
