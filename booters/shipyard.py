@@ -188,12 +188,16 @@ class ShipyardBooter(ComputerBooter):
         self._session_num = session_num
 
     async def boot(self, session_id: str) -> None:
-        ship = await self._sandbox_client.create_ship(
-            ttl=self._ttl,
-            spec=Spec(cpus=1.0, memory="512m"),
-            max_session_num=self._session_num,
-            session_id=session_id,
-        )
+        try:
+            ship = await self._sandbox_client.create_ship(
+                ttl=self._ttl,
+                spec=Spec(cpus=1.0, memory="512m"),
+                max_session_num=self._session_num,
+                session_id=session_id,
+            )
+        except Exception:
+            await self._sandbox_client.close()
+            raise
         logger.info(f"Got sandbox ship: {ship.id} for session: {session_id}")
         self._ship = ship
         self._shell = ShipyardShellWrapper(self._ship.shell)
@@ -201,6 +205,23 @@ class ShipyardBooter(ComputerBooter):
 
     async def shutdown(self) -> None:
         logger.info("[Computer] Shipyard booter shutdown.")
+        await self._sandbox_client.close()
+
+    async def destroy(self) -> None:
+        ship_id = getattr(getattr(self, "_ship", None), "id", None)
+        try:
+            if ship_id:
+                session = await self._sandbox_client._get_session()
+                async with session.delete(
+                    f"{self._sandbox_client.endpoint_url}/ship/{ship_id}"
+                ) as response:
+                    if response.status not in {200, 202, 204, 404}:
+                        error_text = await response.text()
+                        raise RuntimeError(
+                            f"Failed to delete ship: {response.status} {error_text}"
+                        )
+        finally:
+            await self.shutdown()
 
     @property
     def fs(self) -> FileSystemComponent:

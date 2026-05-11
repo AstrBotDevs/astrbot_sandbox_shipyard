@@ -2,8 +2,32 @@
   "shipyard_endpoint": {
     "description": "Shipyard API 地址",
     "type": "string",
+    "default": "http://shipyard:8156",
+    "hint": "Shipyard 服务的 API 地址。默认值对应 Docker Compose 部署。"
+  },
+  "shipyard_auto_start": {
+    "description": "自动启动 Shipyard",
+    "type": "bool",
+    "default": true,
+    "hint": "当 Shipyard API 不可达且使用默认地址时，自动尝试通过 Docker 启动 Shipyard。"
+  },
+  "shipyard_docker_network": {
+    "description": "Shipyard Docker 网络",
+    "type": "string",
     "default": "",
-    "hint": "Shipyard 服务的 API 地址。"
+    "hint": "如果 AstrBot 和 Shipyard Bay 在同一个 Docker 网络内，填写网络名；留空则使用宿主机端口模式。"
+  },
+  "shipyard_bay_image": {
+    "description": "Shipyard Bay 镜像",
+    "type": "string",
+    "default": "soulter/shipyard-bay:latest",
+    "hint": "用于自动启动旧版 Shipyard 服务的 Bay 镜像。"
+  },
+  "shipyard_ship_image": {
+    "description": "Shipyard Ship 镜像",
+    "type": "string",
+    "default": "soulter/shipyard-ship:latest",
+    "hint": "Bay 自动拉起的沙盒镜像。"
   },
   "shipyard_access_token": {
     "description": "Shipyard 访问令牌",
