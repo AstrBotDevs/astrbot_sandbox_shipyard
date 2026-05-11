@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
+from secrets import token_urlsafe
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 from astrbot.api import logger
 from astrbot.core.computer.booters.base import ComputerBooter
@@ -17,11 +19,41 @@ from .booters.shipyard import ShipyardBooter
 
 BootHook = Callable[[Context, str, str, dict], Awaitable[ComputerBooter]]
 DEFAULT_SHIPYARD_ENDPOINT = "http://shipyard:8156"
+_AUTO_START_ENDPOINTS = {
+    ("http", "shipyard", 8156),
+    ("http", "127.0.0.1", 8156),
+    ("http", "localhost", 8156),
+}
+
+
+def _normalize_endpoint_url(endpoint: str) -> str:
+    parsed = urlparse(endpoint.strip())
+    if not parsed.scheme or not parsed.hostname:
+        return endpoint.strip().rstrip("/")
+    netloc = parsed.hostname
+    if parsed.port is not None:
+        netloc = f"{netloc}:{parsed.port}"
+    return urlunparse((parsed.scheme.lower(), netloc, "", "", "", ""))
+
+
+def _endpoint_supports_auto_start(endpoint: str) -> bool:
+    parsed = urlparse(endpoint)
+    if not parsed.scheme or not parsed.hostname:
+        return False
+    try:
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme.lower(),
+        parsed.hostname.lower(),
+        port,
+    ) in _AUTO_START_ENDPOINTS
 
 
 def _resolve_shipyard_endpoint(config: Mapping[str, Any]) -> str:
     endpoint = str(config.get("shipyard_endpoint") or "").strip()
-    return endpoint or DEFAULT_SHIPYARD_ENDPOINT
+    return _normalize_endpoint_url(endpoint or DEFAULT_SHIPYARD_ENDPOINT)
 
 
 class ShipyardSandboxProvider:
@@ -39,6 +71,7 @@ class ShipyardSandboxProvider:
             dict(plugin_config) if plugin_config is not None else {}
         )
         self._boot_hook = boot_hook
+        self._auto_start_access_token = token_urlsafe(32)
 
     def _merged_sandbox_config(self, context: Context, session_id: str) -> dict:
         """Return sandbox config with plugin_config as base and user settings overriding."""
@@ -58,15 +91,14 @@ class ShipyardSandboxProvider:
         merged = self._merged_sandbox_config(context, session_id)
         endpoint_url = _resolve_shipyard_endpoint(merged)
         docker_network = str(merged.get("shipyard_docker_network") or "").strip()
-        auto_start_bay = bool(merged.get("shipyard_auto_start", True)) and endpoint_url in {
-            DEFAULT_SHIPYARD_ENDPOINT,
-            "http://127.0.0.1:8156",
-            "http://localhost:8156",
-        }
+        auto_start_bay = bool(
+            merged.get("shipyard_auto_start", True)
+        ) and _endpoint_supports_auto_start(endpoint_url)
         access_token = str(merged.get("shipyard_access_token", "") or "").strip()
         return {
             "endpoint_url": endpoint_url,
-            "access_token": access_token or ("secret-token" if auto_start_bay else ""),
+            "access_token": access_token
+            or (self._auto_start_access_token if auto_start_bay else ""),
             "ttl": merged.get("shipyard_ttl", 3600),
             "session_num": merged.get("shipyard_max_sessions", 10),
             "auto_start_bay": auto_start_bay,
@@ -115,6 +147,9 @@ class ShipyardSandboxProvider:
     async def destroy_booter(self, booter: ComputerBooter, record: dict) -> None:
         destroy = getattr(booter, "destroy", None)
         if callable(destroy):
-            await destroy()
-            return
-        await booter.shutdown()
+            try:
+                await destroy()
+            finally:
+                await booter.shutdown()
+        else:
+            await booter.shutdown()

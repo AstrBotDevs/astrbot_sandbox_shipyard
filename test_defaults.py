@@ -37,6 +37,8 @@ def test_shipyard_provider_enables_auto_start_for_default_endpoint():
     config = provider.build_create_config(context, "dashboard")
 
     assert config["auto_start_bay"] is True
+    assert config["access_token"]
+    assert config["access_token"] != "secret-token"
     assert config["bay_image"] == "soulter/shipyard-bay:latest"
     assert config["ship_image"] == "soulter/shipyard-ship:latest"
     assert config["docker_network"] == ""
@@ -76,6 +78,22 @@ def test_shipyard_provider_does_not_auto_start_for_explicit_external_endpoint():
     assert config["endpoint_url"] == "http://example.com:8156"
     assert config["auto_start_bay"] is False
     assert config["docker_network"] == ""
+
+
+def test_shipyard_provider_normalizes_local_endpoint_for_auto_start():
+    provider = ShipyardSandboxProvider()
+    context = SimpleNamespace(
+        get_config=lambda umo: {
+            "provider_settings": {
+                "sandbox": {"shipyard_endpoint": " http://localhost:8156/ "}
+            }
+        }
+    )
+
+    config = provider.build_create_config(context, "dashboard")
+
+    assert config["endpoint_url"] == "http://localhost:8156"
+    assert config["auto_start_bay"] is True
 
 
 def test_shipyard_provider_strips_endpoint_before_defaulting():
@@ -165,6 +183,7 @@ async def test_shipyard_bay_manager_pulls_ship_image_when_reusing_existing_conta
     class FakeContainers:
         async def get(self, container_id):
             calls.append(("get", container_id))
+
             class FakeContainer:
                 async def delete(self, force=False):
                     calls.append(("delete", force))
@@ -206,7 +225,7 @@ async def test_shipyard_bay_manager_pulls_ship_image_when_reusing_existing_conta
     )
 
 
-def test_shipyard_bay_manager_omits_docker_network_for_local_host_port():
+def test_shipyard_bay_manager_uses_default_ship_network_for_local_host_port():
     manager = ShipyardBayContainerManager(
         endpoint_url="http://127.0.0.1:8156",
         access_token="token",
@@ -214,8 +233,7 @@ def test_shipyard_bay_manager_omits_docker_network_for_local_host_port():
 
     env = manager._container_env()
 
-    assert "DOCKER_NETWORK=shipyard" not in env
-    assert not any(item.startswith("DOCKER_NETWORK=") for item in env)
+    assert "DOCKER_NETWORK=shipyard" in env
 
 
 def test_shipyard_bay_manager_uses_configured_docker_network():
@@ -334,7 +352,7 @@ async def test_shipyard_bay_manager_recreates_container_when_network_env_is_stal
 
     assert ("delete", True) in calls
     create_call = next(call for call in calls if call[0] == "create")
-    assert not any(item.startswith("DOCKER_NETWORK=") for item in create_call[2])
+    assert "DOCKER_NETWORK=shipyard" in create_call[2]
     assert ("healthy", "http://127.0.0.1:8156") in calls
 
 
@@ -367,7 +385,32 @@ async def test_shipyard_booter_closes_client_when_create_ship_fails(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_shipyard_booter_destroy_deletes_ship_before_closing_client(monkeypatch):
+async def test_shipyard_booter_rejects_reuse_after_failed_boot(monkeypatch):
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        async def create_ship(self, **kwargs):
+            raise RuntimeError("create failed")
+
+        async def close(self):
+            pass
+
+    monkeypatch.setattr(shipyard_booter, "ShipyardClient", FakeClient)
+
+    booter = shipyard_booter.ShipyardBooter(
+        endpoint_url="http://shipyard:8156",
+        access_token="token",
+    )
+
+    with pytest.raises(RuntimeError, match="create failed"):
+        await booter.boot("session-a")
+    with pytest.raises(RuntimeError, match="failed to boot"):
+        await booter.boot("session-a")
+
+
+@pytest.mark.asyncio
+async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
     calls = []
 
     class FakeResponse:
@@ -415,12 +458,11 @@ async def test_shipyard_booter_destroy_deletes_ship_before_closing_client(monkey
     assert calls == [
         ("session", None),
         ("delete", "http://shipyard:8156/ship/ship-123"),
-        ("close", None),
     ]
 
 
 @pytest.mark.asyncio
-async def test_shipyard_provider_destroy_booter_prefers_destroy():
+async def test_shipyard_provider_destroy_booter_runs_shutdown_after_destroy():
     calls = []
 
     class FakeBooter:
@@ -434,4 +476,4 @@ async def test_shipyard_provider_destroy_booter_prefers_destroy():
 
     await provider.destroy_booter(FakeBooter(), {})
 
-    assert calls == ["destroy"]
+    assert calls == ["destroy", "shutdown"]

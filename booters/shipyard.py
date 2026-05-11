@@ -186,8 +186,11 @@ class ShipyardBooter(ComputerBooter):
         )
         self._ttl = ttl
         self._session_num = session_num
+        self._failed_boot = False
 
     async def boot(self, session_id: str) -> None:
+        if self._failed_boot:
+            raise RuntimeError("Shipyard booter failed to boot and cannot be reused")
         try:
             ship = await self._sandbox_client.create_ship(
                 ttl=self._ttl,
@@ -197,6 +200,7 @@ class ShipyardBooter(ComputerBooter):
             )
         except Exception:
             await self._sandbox_client.close()
+            self._failed_boot = True
             raise
         logger.info(f"Got sandbox ship: {ship.id} for session: {session_id}")
         self._ship = ship
@@ -209,19 +213,17 @@ class ShipyardBooter(ComputerBooter):
 
     async def destroy(self) -> None:
         ship_id = getattr(getattr(self, "_ship", None), "id", None)
-        try:
-            if ship_id:
-                session = await self._sandbox_client._get_session()
-                async with session.delete(
-                    f"{self._sandbox_client.endpoint_url}/ship/{ship_id}"
-                ) as response:
-                    if response.status not in {200, 202, 204, 404}:
-                        error_text = await response.text()
-                        raise RuntimeError(
-                            f"Failed to delete ship: {response.status} {error_text}"
-                        )
-        finally:
-            await self.shutdown()
+        if not ship_id:
+            return
+        session = await self._sandbox_client._get_session()
+        async with session.delete(
+            f"{self._sandbox_client.endpoint_url}/ship/{ship_id}"
+        ) as response:
+            if response.status not in {200, 202, 204, 404}:
+                error_text = await response.text()
+                raise RuntimeError(
+                    f"Failed to delete ship: {response.status} {error_text}"
+                )
 
     @property
     def fs(self) -> FileSystemComponent:

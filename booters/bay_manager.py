@@ -47,9 +47,13 @@ class ShipyardBayContainerManager:
         if existing is not None:
             self._container = await self._docker.containers.get(existing["Id"])
             if not self._container_env_matches(existing):
-                logger.info("[Shipyard] Recreating Bay container because configuration changed")
+                logger.info(
+                    "[Shipyard] Recreating Bay container because configuration changed"
+                )
                 await self._container.delete(force=True)
                 existing = None
+
+        self._endpoint_url = self._effective_endpoint()
 
         if existing is not None:
             if not existing.get("State", {}).get("Running"):
@@ -58,15 +62,10 @@ class ShipyardBayContainerManager:
             await self.wait_healthy()
             return self._endpoint_url
 
-        if self._docker_network:
-            self._endpoint_url = f"http://shipyard:{BAY_PORT}"
-        else:
-            self._endpoint_url = f"http://127.0.0.1:{self._host_port}"
-
         logger.info(
             "[Shipyard] Starting Bay container: image=%s network=%s",
             self._image,
-            self._docker_network or "host-port",
+            self._effective_network() if self._docker_network else "host-port",
         )
         config = {
             "Image": self._image,
@@ -92,8 +91,16 @@ class ShipyardBayContainerManager:
                 "or configure an explicit Shipyard endpoint."
             ) from exc
 
+    def _effective_network(self) -> str:
+        return self._docker_network or DEFAULT_SHIP_NETWORK
+
+    def _effective_endpoint(self) -> str:
+        if self._docker_network:
+            return f"http://shipyard:{BAY_PORT}"
+        return f"http://127.0.0.1:{self._host_port}"
+
     async def _ensure_docker_network(self) -> None:
-        network_name = self._docker_network or DEFAULT_SHIP_NETWORK
+        network_name = self._effective_network()
         assert self._docker is not None
         try:
             networks = await self._docker.networks.list()
@@ -108,10 +115,14 @@ class ShipyardBayContainerManager:
             if info.get("Name") == network_name:
                 return
         try:
-            await self._docker.networks.create({"Name": network_name, "Driver": "bridge"})
+            await self._docker.networks.create(
+                {"Name": network_name, "Driver": "bridge"}
+            )
             logger.info("[Shipyard] Created Docker network: %s", network_name)
         except Exception as exc:
-            logger.warning("[Shipyard] Failed to create Docker network %s: %s", network_name, exc)
+            logger.warning(
+                "[Shipyard] Failed to create Docker network %s: %s", network_name, exc
+            )
 
     async def wait_healthy(self, timeout: int = HEALTH_TIMEOUT_S) -> None:
         loop = asyncio.get_running_loop()
@@ -150,9 +161,8 @@ class ShipyardBayContainerManager:
             "SHIP_DATA_DIR=/tmp/astrbot_shipyard/ship_mnt_data",
             "DEFAULT_SHIP_CPUS=1.0",
             "DEFAULT_SHIP_MEMORY=512m",
+            f"DOCKER_NETWORK={self._effective_network()}",
         ]
-        if self._docker_network:
-            env.append(f"DOCKER_NETWORK={self._docker_network}")
         return env
 
     def _host_config(self) -> dict[str, Any]:
@@ -164,7 +174,7 @@ class ShipyardBayContainerManager:
             "RestartPolicy": {"Name": "unless-stopped"},
         }
         if self._docker_network:
-            config["NetworkMode"] = self._docker_network
+            config["NetworkMode"] = self._effective_network()
         else:
             config["PortBindings"] = {
                 f"{BAY_PORT}/tcp": [{"HostPort": str(self._host_port)}]
@@ -177,15 +187,7 @@ class ShipyardBayContainerManager:
     ) -> bool:
         existing = self._env_map(container_info.get("Config", {}).get("Env") or [])
         desired = self._env_map(self._container_env())
-        if not self._docker_network:
-            return (
-                existing.get("DOCKER_NETWORK") is None
-                and all(existing.get(key) == value for key, value in desired.items())
-            )
-        return (
-            existing.get("DOCKER_NETWORK") == self._docker_network
-            and all(existing.get(key) == value for key, value in desired.items())
-        )
+        return all(existing.get(key) == value for key, value in desired.items())
 
     @staticmethod
     def _env_map(items: list[str]) -> dict[str, str]:
