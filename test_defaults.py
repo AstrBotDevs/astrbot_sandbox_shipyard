@@ -538,3 +538,28 @@ async def test_shipyard_shell_wrapper_extracts_stdout_from_object_result():
     assert result["exit_code"] == 0
     assert result["success"] is True
     assert result["execution_id"] == "exec-123"
+
+
+@pytest.mark.asyncio
+async def test_shipyard_shell_wrapper_extracts_stdout_from_nested_data_result():
+    class FakeShell:
+        async def exec(self, *args, **kwargs):
+            del args, kwargs
+            return {
+                "success": True,
+                "data": {
+                    "stdout": "Hello Shipyard\n",
+                    "stderr": "",
+                    "return_code": 0,
+                    "pid": 122,
+                },
+            }
+
+    wrapper = ShipyardShellWrapper(FakeShell())
+
+    result = await wrapper.exec('echo "Hello Shipyard"')
+
+    assert result["stdout"] == "Hello Shipyard\n"
+    assert result["stderr"] == ""
+    assert result["exit_code"] == 0
+    assert result["success"] is True

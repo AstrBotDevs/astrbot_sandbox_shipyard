@@ -54,6 +54,16 @@ def _maybe_model_dump(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _normalize_shell_payload(value: Any) -> dict[str, Any]:
+    payload = _maybe_model_dump(value)
+    data = payload.get("data")
+    if isinstance(data, dict):
+        merged = dict(payload)
+        merged.update(data)
+        payload = merged
+    return payload
+
+
 class ShipyardShellWrapper:
     def __init__(self, _shipyard_shell: ShellComponent):
         self._shell = _shipyard_shell
@@ -90,11 +100,15 @@ class ShipyardShellWrapper:
             timeout=timeout or 300,
             cwd=cwd,
         )
-        payload = _maybe_model_dump(result)
+        payload = _normalize_shell_payload(result)
 
         stdout = payload.get("output", payload.get("stdout", "")) or ""
         stderr = payload.get("error", payload.get("stderr", "")) or ""
         exit_code = payload.get("exit_code")
+        if exit_code is None:
+            exit_code = payload.get("return_code")
+        if exit_code is None:
+            exit_code = payload.get("returncode")
         if background:
             pid: int | None = None
             try:
