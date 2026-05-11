@@ -19,73 +19,7 @@ from astrbot.core.computer.olayer import (
 from .shell_background import build_detached_shell_command
 from .shipyard_search_file_util import search_files_via_shell
 
-_SHELL_RESULT_ATTRS: tuple[str, ...] = (
-    "stdout",
-    "stderr",
-    "output",
-    "error",
-    "returncode",
-    "return_code",
-    "exit_code",
-    "success",
-    "execution_id",
-    "execution_time_ms",
-    "command",
-)
 _SHIP_DELETE_TIMEOUT_S = 30
-
-
-def _build_shell_payload_from_attrs(value: Any) -> dict[str, Any]:
-    return {
-        key: getattr(value, key) for key in _SHELL_RESULT_ATTRS if hasattr(value, key)
-    }
-
-
-def _to_payload_dict(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return dict(value)
-    if is_dataclass(value) and not isinstance(value, type):
-        return asdict(value)
-    for method_name in ("model_dump", "dict"):
-        method = getattr(value, method_name, None)
-        if not callable(method):
-            continue
-        try:
-            dumped = method()
-        except Exception:
-            dumped = None
-        if isinstance(dumped, dict):
-            return dict(dumped)
-    return _build_shell_payload_from_attrs(value)
-
-
-def _flatten_data_field(payload: dict[str, Any]) -> dict[str, Any]:
-    data = payload.get("data")
-    if not isinstance(data, dict):
-        return payload
-    merged = dict(payload)
-    merged.update(data)
-    return merged
-
-
-def _first(payload: dict[str, Any], *keys: str) -> Any:
-    for key in keys:
-        if key in payload:
-            return payload[key]
-    return None
-
-
-def _normalize_shell_aliases(payload: dict[str, Any]) -> dict[str, Any]:
-    stdout = _first(payload, "output", "stdout")
-    stderr = _first(payload, "error", "stderr")
-    exit_code = _first(payload, "exit_code", "return_code", "returncode")
-    if stdout is not None:
-        payload["stdout"] = stdout
-    if stderr is not None:
-        payload["stderr"] = stderr
-    if exit_code is not None:
-        payload["exit_code"] = exit_code
-    return payload
 
 
 async def _delete_ship_via_api(
@@ -103,9 +37,59 @@ async def _delete_ship_via_api(
 
 
 def _normalize_shell_result(value: Any) -> dict[str, Any]:
-    payload = _to_payload_dict(value)
-    payload = _flatten_data_field(payload)
-    return _normalize_shell_aliases(payload)
+    if isinstance(value, dict):
+        payload: dict[str, Any] = dict(value)
+    elif is_dataclass(value) and not isinstance(value, type):
+        payload = asdict(value)
+    else:
+        payload = {}
+        for method_name in ("model_dump", "dict"):
+            method = getattr(value, method_name, None)
+            if not callable(method):
+                continue
+            try:
+                dumped = method()
+            except Exception:
+                dumped = None
+            if isinstance(dumped, dict):
+                payload = dict(dumped)
+                break
+
+        if not payload:
+            payload = {
+                "stdout": getattr(value, "stdout", None),
+                "stderr": getattr(value, "stderr", None),
+                "output": getattr(value, "output", None),
+                "error": getattr(value, "error", None),
+                "success": getattr(value, "success", None),
+                "execution_id": getattr(value, "execution_id", None),
+                "execution_time_ms": getattr(value, "execution_time_ms", None),
+                "command": getattr(value, "command", None),
+                "exit_code": getattr(value, "exit_code", None),
+                "return_code": getattr(value, "return_code", None),
+                "returncode": getattr(value, "returncode", None),
+            }
+
+    data = payload.get("data")
+    if isinstance(data, dict):
+        payload = {**payload, **data}
+
+    stdout = payload.get("stdout") or payload.get("output")
+    stderr = payload.get("stderr") or payload.get("error")
+    exit_code = (
+        payload.get("exit_code")
+        if "exit_code" in payload
+        else payload.get("return_code", payload.get("returncode"))
+    )
+
+    if stdout is not None:
+        payload["stdout"] = stdout
+    if stderr is not None:
+        payload["stderr"] = stderr
+    if exit_code is not None:
+        payload["exit_code"] = exit_code
+
+    return payload
 
 
 class ShipyardShellWrapper:
