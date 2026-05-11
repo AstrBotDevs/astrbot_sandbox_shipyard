@@ -1,38 +1,35 @@
 # astrbot_sandbox_shipyard
 
-英文版说明：[`README.md`](./README.md)
+<div align="center">
 
-`astrbot_sandbox_shipyard` 是一个基于 AstrBot 通用 sandbox provider 机制实现的插件，用来提供 `shipyard` 运行时。
+<a href="./README.md">English</a> ｜ 简体中文
 
-它适合需要经典远程沙箱能力的场景，支持 shell、Python 和文件系统操作。
+</div>
 
-## 功能特性
+`astrbot_sandbox_shipyard` 是 AstrBot 的 Shipyard 沙盒驱动插件，适合已经部署 Shipyard 服务、并希望让 Agent 远程执行命令、运行 Python、读写文件的场景。
 
-- 为 AstrBot 提供 `shipyard` 沙箱运行时。
-- 支持 shell、Python、文件系统能力。
-- 沙箱启动时会同步本地 AstrBot skills。
-- 支持配置会话 TTL 和最大会话数量。
+## 主要功能
 
-## 依赖要求
+1. 🛡️ 为 AstrBot 提供 `shipyard` 沙盒驱动。
+2. 💻 支持 Shell、Python 和文件操作。
+3. 📦 沙盒启动时会同步本地 AstrBot Skills。
+4. ⏱️ 支持配置会话 TTL 和最大会话数量。
 
-- 需要使用已经支持外部 sandbox provider 插件的 AstrBot 版本。
-- 依赖 `requirements.txt` 中的 `shipyard-python-sdk`。
-- 需要可访问的 Shipyard 服务地址。
-- 需要有效的 Shipyard Access Token。
+## 快速开始
 
-## 安装方式
+### 安装插件
 
-把插件克隆到 AstrBot 的插件目录：
+把插件克隆到 AstrBot 插件目录：
 
 ```bash
 git clone https://github.com/zouyonghe/astrbot_sandbox_shipyard.git data/plugins/astrbot_sandbox_shipyard
 ```
 
-然后重启 AstrBot，或重新加载插件。
+然后重启 AstrBot，或在插件管理页重新加载插件。
 
-## 配置方法
+### 启用 Shipyard 沙盒驱动
 
-先在 AstrBot 核心配置中启用 sandbox，并把运行时设置为 `shipyard`：
+先在 AstrBot 核心配置中启用沙盒模式，并把沙盒驱动设置为 `shipyard`：
 
 ```json
 {
@@ -45,7 +42,7 @@ git clone https://github.com/zouyonghe/astrbot_sandbox_shipyard.git data/plugins
 }
 ```
 
-插件支持的配置项：
+## 配置项
 
 | 键名 | 说明 |
 | --- | --- |
@@ -54,14 +51,18 @@ git clone https://github.com/zouyonghe/astrbot_sandbox_shipyard.git data/plugins
 | `shipyard_ttl` | 会话 TTL，单位秒。 |
 | `shipyard_max_sessions` | 最大会话数量。 |
 
-## 使用说明
+## 适合场景
 
 - 该插件适合远程执行命令、运行 Python、读写文件等场景。
 - 它不会注册浏览器自动化工具，也不会提供 GUI 工具。
-- 插件启用后，把 `provider_settings.sandbox.booter` 设置为 `shipyard`，AstrBot 就会把 sandbox 请求路由到这个运行时。
+- 插件启用后，把 `provider_settings.sandbox.booter` 设置为 `shipyard`，AstrBot 就会把沙盒请求交给它处理。
 
-## 限制说明
+## 依赖与限制
 
+- 需要使用支持外部沙盒驱动插件的 AstrBot 版本。
+- 依赖 `requirements.txt` 中的 `shipyard-python-sdk`。
+- 需要可访问的 Shipyard 服务地址。
+- 需要有效的 Shipyard Access Token。
 - 不包含浏览器自动化能力。
 - 不包含截图、鼠标、键盘等 GUI 能力。
 - 依赖外部 Shipyard 服务正常运行且可访问。
