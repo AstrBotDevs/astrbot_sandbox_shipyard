@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shlex
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from shipyard import FileSystemComponent as ShipyardFileSystemComponent
@@ -21,10 +22,35 @@ from .shipyard_search_file_util import search_files_via_shell
 def _maybe_model_dump(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
+    if is_dataclass(value) and not isinstance(value, type):
+        return asdict(value)
     if hasattr(value, "model_dump"):
         dumped = value.model_dump()
         if isinstance(dumped, dict):
             return dumped
+    if hasattr(value, "dict"):
+        dumped = value.dict()
+        if isinstance(dumped, dict):
+            return dumped
+    attr_payload = {
+        key: getattr(value, key)
+        for key in (
+            "stdout",
+            "stderr",
+            "output",
+            "error",
+            "returncode",
+            "return_code",
+            "exit_code",
+            "success",
+            "execution_id",
+            "execution_time_ms",
+            "command",
+        )
+        if hasattr(value, key)
+    }
+    if attr_payload:
+        return attr_payload
     return {}
 
 

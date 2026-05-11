@@ -7,6 +7,9 @@ from data.plugins.astrbot_sandbox_shipyard.booters import shipyard as shipyard_b
 from data.plugins.astrbot_sandbox_shipyard.booters.bay_manager import (
     ShipyardBayContainerManager,
 )
+from data.plugins.astrbot_sandbox_shipyard.booters.shipyard import (
+    ShipyardShellWrapper,
+)
 from data.plugins.astrbot_sandbox_shipyard.provider import (
     DEFAULT_SHIPYARD_ENDPOINT,
     ShipyardSandboxProvider,
@@ -477,3 +480,29 @@ async def test_shipyard_provider_destroy_booter_runs_shutdown_after_destroy():
     await provider.destroy_booter(FakeBooter(), {})
 
     assert calls == ["destroy", "shutdown"]
+
+
+@pytest.mark.asyncio
+async def test_shipyard_shell_wrapper_extracts_stdout_from_object_result():
+    class FakeShell:
+        async def exec(self, *args, **kwargs):
+            del args, kwargs
+            return SimpleNamespace(
+                stdout="shipyard-ok",
+                stderr="",
+                exit_code=0,
+                success=True,
+                execution_id="exec-123",
+                execution_time_ms=42,
+                command="echo shipyard-ok",
+            )
+
+    wrapper = ShipyardShellWrapper(FakeShell())
+
+    result = await wrapper.exec("echo shipyard-ok")
+
+    assert result["stdout"] == "shipyard-ok"
+    assert result["stderr"] == ""
+    assert result["exit_code"] == 0
+    assert result["success"] is True
+    assert result["execution_id"] == "exec-123"
