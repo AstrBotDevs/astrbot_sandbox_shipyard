@@ -33,7 +33,17 @@ def _normalize_endpoint_url(endpoint: str) -> str:
     netloc = parsed.hostname
     if parsed.port is not None:
         netloc = f"{netloc}:{parsed.port}"
-    return urlunparse((parsed.scheme.lower(), netloc, "", "", "", ""))
+    path = "" if parsed.path == "/" else parsed.path.rstrip("/")
+    return urlunparse(
+        (
+            parsed.scheme.lower(),
+            netloc,
+            path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment,
+        )
+    )
 
 
 def _endpoint_supports_auto_start(endpoint: str) -> bool:
@@ -49,6 +59,22 @@ def _endpoint_supports_auto_start(endpoint: str) -> bool:
         parsed.hostname.lower(),
         port,
     ) in _AUTO_START_ENDPOINTS
+
+
+def _coerce_bool(value: Any, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off"}:
+            return False
+    return bool(value)
 
 
 def _resolve_shipyard_endpoint(config: Mapping[str, Any]) -> str:
@@ -91,7 +117,7 @@ class ShipyardSandboxProvider:
         merged = self._merged_sandbox_config(context, session_id)
         endpoint_url = _resolve_shipyard_endpoint(merged)
         docker_network = str(merged.get("shipyard_docker_network") or "").strip()
-        auto_start_bay = bool(
+        auto_start_bay = _coerce_bool(
             merged.get("shipyard_auto_start", True)
         ) and _endpoint_supports_auto_start(endpoint_url)
         access_token = str(merged.get("shipyard_access_token", "") or "").strip()

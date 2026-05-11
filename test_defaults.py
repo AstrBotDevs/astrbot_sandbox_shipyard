@@ -99,6 +99,36 @@ def test_shipyard_provider_normalizes_local_endpoint_for_auto_start():
     assert config["auto_start_bay"] is True
 
 
+def test_shipyard_provider_preserves_endpoint_path_when_normalizing():
+    provider = ShipyardSandboxProvider()
+    context = SimpleNamespace(
+        get_config=lambda umo: {
+            "provider_settings": {
+                "sandbox": {"shipyard_endpoint": "http://localhost:8156/api?token=1"}
+            }
+        }
+    )
+
+    config = provider.build_create_config(context, "dashboard")
+
+    assert config["endpoint_url"] == "http://localhost:8156/api?token=1"
+
+
+def test_shipyard_provider_disables_auto_start_for_false_string():
+    provider = ShipyardSandboxProvider()
+    context = SimpleNamespace(
+        get_config=lambda umo: {
+            "provider_settings": {
+                "sandbox": {"shipyard_auto_start": "false"}
+            }
+        }
+    )
+
+    config = provider.build_create_config(context, "dashboard")
+
+    assert config["auto_start_bay"] is False
+
+
 def test_shipyard_provider_strips_endpoint_before_defaulting():
     provider = ShipyardSandboxProvider()
     context = SimpleNamespace(
@@ -550,6 +580,30 @@ async def test_shipyard_shell_wrapper_extracts_stdout_from_object_result():
     assert result["exit_code"] == 0
     assert result["success"] is True
     assert result["execution_id"] == "exec-123"
+
+
+@pytest.mark.asyncio
+async def test_shipyard_shell_wrapper_falls_back_when_dict_method_fails():
+    class FakeShellResult:
+        stdout = "shipyard-ok"
+        stderr = ""
+        exit_code = 0
+
+        def dict(self):
+            raise RuntimeError("broken dict")
+
+    class FakeShell:
+        async def exec(self, *args, **kwargs):
+            del args, kwargs
+            return FakeShellResult()
+
+    wrapper = ShipyardShellWrapper(FakeShell())
+
+    result = await wrapper.exec("echo shipyard-ok")
+
+    assert result["stdout"] == "shipyard-ok"
+    assert result["stderr"] == ""
+    assert result["exit_code"] == 0
 
 
 @pytest.mark.asyncio

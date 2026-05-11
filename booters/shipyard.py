@@ -25,11 +25,55 @@ def _normalize_shell_result(value: Any) -> dict[str, Any]:
     elif is_dataclass(value) and not isinstance(value, type):
         payload = asdict(value)
     elif hasattr(value, "model_dump"):
-        dumped = value.model_dump()
-        payload = dict(dumped) if isinstance(dumped, dict) else {}
+        try:
+            dumped = value.model_dump()
+        except Exception:
+            dumped = None
+        if isinstance(dumped, dict):
+            payload = dict(dumped)
+        else:
+            payload = {
+                key: getattr(value, key)
+                for key in (
+                    "stdout",
+                    "stderr",
+                    "output",
+                    "error",
+                    "returncode",
+                    "return_code",
+                    "exit_code",
+                    "success",
+                    "execution_id",
+                    "execution_time_ms",
+                    "command",
+                )
+                if hasattr(value, key)
+            }
     elif hasattr(value, "dict"):
-        dumped = value.dict()
-        payload = dict(dumped) if isinstance(dumped, dict) else {}
+        try:
+            dumped = value.dict()
+        except Exception:
+            dumped = None
+        if isinstance(dumped, dict):
+            payload = dict(dumped)
+        else:
+            payload = {
+                key: getattr(value, key)
+                for key in (
+                    "stdout",
+                    "stderr",
+                    "output",
+                    "error",
+                    "returncode",
+                    "return_code",
+                    "exit_code",
+                    "success",
+                    "execution_id",
+                    "execution_time_ms",
+                    "command",
+                )
+                if hasattr(value, key)
+            }
     else:
         payload = {
             key: getattr(value, key)
