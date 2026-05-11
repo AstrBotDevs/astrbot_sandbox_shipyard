@@ -21,6 +21,8 @@ from .booters.value_utils import coerce_bool
 BootHook = Callable[[Context, str, str, dict], Awaitable[ComputerBooter]]
 DEFAULT_SHIPYARD_ENDPOINT = "http://127.0.0.1:8156"
 _AUTO_START_ENDPOINTS = {
+    # Shipyard service-name endpoints are for Docker network mode;
+    # localhost is the host-port default path.
     ("http", "shipyard", 8156),
     ("http", "127.0.0.1", 8156),
     ("http", "localhost", 8156),
