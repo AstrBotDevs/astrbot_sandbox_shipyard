@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import shlex
+from collections.abc import Mapping
+from dataclasses import asdict, is_dataclass
+from enum import Enum, auto
 from typing import Any
 
+import aiohttp
 from shipyard import FileSystemComponent as ShipyardFileSystemComponent
 from shipyard import ShipyardClient, Spec
 
@@ -17,15 +21,93 @@ from astrbot.core.computer.olayer import (
 from .shell_background import build_detached_shell_command
 from .shipyard_search_file_util import search_files_via_shell
 
+_SHIP_DELETE_TIMEOUT_S = 30
 
-def _maybe_model_dump(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return value
-    if hasattr(value, "model_dump"):
-        dumped = value.model_dump()
+
+class _BootState(Enum):
+    NEW = auto()
+    READY = auto()
+    FAILED = auto()
+    DESTROYED = auto()
+
+
+async def _delete_ship_via_api(
+    endpoint_url: str, access_token: str, ship_id: str
+) -> None:
+    headers = {"Authorization": f"Bearer {access_token}"}
+    timeout = aiohttp.ClientTimeout(total=_SHIP_DELETE_TIMEOUT_S)
+    async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+        async with session.delete(f"{endpoint_url}/ship/{ship_id}") as response:
+            if response.status not in {200, 202, 204, 404}:
+                error_text = await response.text()
+                raise RuntimeError(
+                    f"Failed to delete ship: {response.status} {error_text}"
+                )
+
+
+def _to_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, Mapping):
+        return dict(value)
+    if is_dataclass(value) and not isinstance(value, type):
+        return asdict(value)
+
+    for method_name in ("model_dump", "dict"):
+        method = getattr(value, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            dumped = method()
+        except Exception:
+            continue
         if isinstance(dumped, dict):
-            return dumped
+            return dict(dumped)
+
+    keys = (
+        "stdout",
+        "stderr",
+        "output",
+        "error",
+        "success",
+        "execution_id",
+        "execution_time_ms",
+        "command",
+        "exit_code",
+        "return_code",
+        "returncode",
+        "data",
+    )
+    if any(hasattr(value, key) for key in keys):
+        return {key: getattr(value, key, None) for key in keys}
+
     return {}
+
+
+def _normalize_shell_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+    data = normalized.get("data")
+    if isinstance(data, dict):
+        normalized = {**normalized, **data}
+
+    stdout = normalized.get("stdout") or normalized.get("output")
+    stderr = normalized.get("stderr") or normalized.get("error")
+    exit_code = (
+        normalized["exit_code"]
+        if "exit_code" in normalized
+        else normalized.get("return_code", normalized.get("returncode"))
+    )
+
+    if stdout is not None:
+        normalized["stdout"] = stdout
+    if stderr is not None:
+        normalized["stderr"] = stderr
+    if exit_code is not None:
+        normalized["exit_code"] = exit_code
+
+    return normalized
+
+
+def _normalize_shell_result(value: Any) -> dict[str, Any]:
+    return _normalize_shell_payload(_to_mapping(value))
 
 
 class ShipyardShellWrapper:
@@ -64,10 +146,10 @@ class ShipyardShellWrapper:
             timeout=timeout or 300,
             cwd=cwd,
         )
-        payload = _maybe_model_dump(result)
+        payload = _normalize_shell_result(result)
 
-        stdout = payload.get("output", payload.get("stdout", "")) or ""
-        stderr = payload.get("error", payload.get("stderr", "")) or ""
+        stdout = payload.get("stdout") or ""
+        stderr = payload.get("stderr") or ""
         exit_code = payload.get("exit_code")
         if background:
             pid: int | None = None
@@ -186,21 +268,48 @@ class ShipyardBooter(ComputerBooter):
         )
         self._ttl = ttl
         self._session_num = session_num
+        self._state = _BootState.NEW
 
     async def boot(self, session_id: str) -> None:
-        ship = await self._sandbox_client.create_ship(
-            ttl=self._ttl,
-            spec=Spec(cpus=1.0, memory="512m"),
-            max_session_num=self._session_num,
-            session_id=session_id,
-        )
+        if self._state in {_BootState.FAILED, _BootState.DESTROYED}:
+            raise RuntimeError(
+                "Shipyard booter failed to boot or has been shut down and cannot be reused"
+            )
+        try:
+            ship = await self._sandbox_client.create_ship(
+                ttl=self._ttl,
+                spec=Spec(cpus=1.0, memory="512m"),
+                max_session_num=self._session_num,
+                session_id=session_id,
+            )
+        except Exception:
+            self._state = _BootState.FAILED
+            await self._sandbox_client.close()
+            raise
         logger.info(f"Got sandbox ship: {ship.id} for session: {session_id}")
         self._ship = ship
         self._shell = ShipyardShellWrapper(self._ship.shell)
         self._fs = ShipyardFileSystemWrapper(self._ship.fs, self._shell)
+        self._state = _BootState.READY
+
+    async def destroy(self) -> None:
+        if self._state is _BootState.DESTROYED:
+            return
+        self._state = _BootState.DESTROYED
+        logger.info("[Computer] Shipyard booter shutdown.")
+        ship_id = getattr(getattr(self, "_ship", None), "id", None)
+        try:
+            if ship_id:
+                await _delete_ship_via_api(
+                    self._sandbox_client.endpoint_url,
+                    self._sandbox_client.access_token,
+                    ship_id,
+                )
+        finally:
+            await self._sandbox_client.close()
 
     async def shutdown(self) -> None:
-        logger.info("[Computer] Shipyard booter shutdown.")
+        await self.destroy()
 
     @property
     def fs(self) -> FileSystemComponent:
