@@ -137,6 +137,48 @@ def test_shipyard_provider_warns_on_malformed_endpoint(monkeypatch):
     assert warnings
 
 
+def test_shipyard_provider_warns_on_endpoint_missing_scheme(monkeypatch):
+    warnings = []
+
+    def fake_warning(*args, **kwargs):
+        warnings.append((args, kwargs))
+
+    monkeypatch.setattr(shipyard_provider.logger, "warning", fake_warning)
+    provider = ShipyardSandboxProvider()
+    context = SimpleNamespace(
+        get_config=lambda umo: {
+            "provider_settings": {"sandbox": {"shipyard_endpoint": "shipyard:8156"}}
+        }
+    )
+
+    config = provider.build_create_config(context, "dashboard")
+
+    assert config["endpoint_url"] == "shipyard:8156"
+    assert config["auto_start_bay"] is False
+    assert warnings
+
+
+def test_shipyard_provider_warns_on_endpoint_missing_host(monkeypatch):
+    warnings = []
+
+    def fake_warning(*args, **kwargs):
+        warnings.append((args, kwargs))
+
+    monkeypatch.setattr(shipyard_provider.logger, "warning", fake_warning)
+    provider = ShipyardSandboxProvider()
+    context = SimpleNamespace(
+        get_config=lambda umo: {
+            "provider_settings": {"sandbox": {"shipyard_endpoint": "http:///"}}
+        }
+    )
+
+    config = provider.build_create_config(context, "dashboard")
+
+    assert config["endpoint_url"] == "http://"
+    assert config["auto_start_bay"] is False
+    assert warnings
+
+
 def test_shipyard_provider_disables_auto_start_for_false_string():
     provider = ShipyardSandboxProvider()
     context = SimpleNamespace(
@@ -608,7 +650,7 @@ async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_shipyard_provider_destroy_booter_runs_shutdown_after_destroy():
+async def test_shipyard_provider_destroy_booter_uses_destroy_only():
     calls = []
 
     class FakeBooter:
@@ -622,7 +664,7 @@ async def test_shipyard_provider_destroy_booter_runs_shutdown_after_destroy():
 
     await provider.destroy_booter(FakeBooter(), {})
 
-    assert calls == ["destroy", "shutdown"]
+    assert calls == ["destroy"]
 
 
 @pytest.mark.asyncio
@@ -683,35 +725,28 @@ async def test_shipyard_shell_wrapper_extracts_stdout_from_object_result():
     assert result["execution_id"] == "exec-123"
 
 
-def test_shipyard_shell_result_to_payload_falls_back_to_attrs():
-    payload = shipyard_booter._shell_result_to_payload(
-        SimpleNamespace(
-            stdout="shipyard-ok",
-            stderr="",
-            exit_code=0,
-            execution_id="exec-123",
-        )
-    )
+def test_shipyard_normalize_shell_result_preserves_input_dict():
+    original = {
+        "success": True,
+        "data": {
+            "stdout": "Hello Shipyard\n",
+            "stderr": "",
+            "return_code": 0,
+            "pid": 122,
+        },
+    }
 
-    assert payload["stdout"] == "shipyard-ok"
-    assert payload["stderr"] == ""
-    assert payload["exit_code"] == 0
-    assert payload["execution_id"] == "exec-123"
+    payload = shipyard_booter._normalize_shell_result(original)
 
-
-def test_shipyard_standardize_shell_payload_merges_data_and_aliases():
-    payload = shipyard_booter._standardize_shell_payload(
-        {
-            "success": True,
-            "data": {
-                "stdout": "Hello Shipyard\n",
-                "stderr": "",
-                "return_code": 0,
-                "pid": 122,
-            },
-        }
-    )
-
+    assert original == {
+        "success": True,
+        "data": {
+            "stdout": "Hello Shipyard\n",
+            "stderr": "",
+            "return_code": 0,
+            "pid": 122,
+        },
+    }
     assert payload["stdout"] == "Hello Shipyard\n"
     assert payload["stderr"] == ""
     assert payload["exit_code"] == 0

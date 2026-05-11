@@ -9,6 +9,8 @@ import aiohttp
 
 from astrbot.api import logger
 
+from .value_utils import coerce_bool
+
 BAY_IMAGE = "soulter/shipyard-bay:latest"
 DEFAULT_SHIP_IMAGE = "soulter/shipyard-ship:latest"
 DEFAULT_SHIP_NETWORK = "shipyard"
@@ -21,8 +23,7 @@ BIND_DOCKER_SOCK_ENV = "ASTRBOT_BIND_DOCKER_SOCK"
 
 
 def _env_flag(name: str) -> bool:
-    value = os.getenv(name, "").strip().lower()
-    return value in {"1", "true", "yes"}
+    return coerce_bool(os.getenv(name), default=False)
 
 
 class ShipyardBayContainerManager:

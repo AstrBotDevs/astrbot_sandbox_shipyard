@@ -16,6 +16,7 @@ from .booters.bay_manager import (
     ShipyardBayContainerManager,
 )
 from .booters.shipyard import ShipyardBooter
+from .booters.value_utils import coerce_bool
 
 BootHook = Callable[[Context, str, str, dict], Awaitable[ComputerBooter]]
 DEFAULT_SHIPYARD_ENDPOINT = "http://shipyard:8156"
@@ -24,8 +25,6 @@ _AUTO_START_ENDPOINTS = {
     ("http", "127.0.0.1", 8156),
     ("http", "localhost", 8156),
 }
-_TRUE_VALUES = {"true", "1", "yes", "y", "on"}
-_FALSE_VALUES = {"false", "0", "no", "n", "off"}
 
 
 def _normalize_shipyard_endpoint(endpoint: str) -> tuple[str, bool]:
@@ -33,12 +32,12 @@ def _normalize_shipyard_endpoint(endpoint: str) -> tuple[str, bool]:
     parsed = urlparse(raw)
     if not parsed.scheme or not parsed.hostname:
         logger.warning("[Shipyard] Invalid endpoint ignored: %s", raw)
-        return raw.rstrip("/"), False
+        return raw[:-1] if raw.endswith("/") else raw, False
     try:
         port = parsed.port
     except ValueError:
         logger.warning("[Shipyard] Invalid endpoint ignored: %s", raw)
-        return raw.rstrip("/"), False
+        return raw[:-1] if raw.endswith("/") else raw, False
     netloc = parsed.hostname
     if port is not None:
         netloc = f"{netloc}:{port}"
@@ -59,23 +58,6 @@ def _normalize_shipyard_endpoint(endpoint: str) -> tuple[str, bool]:
         port,
     ) in _AUTO_START_ENDPOINTS
     return normalized, supports_auto_start
-
-
-def _coerce_bool(value: Any, default: bool = True) -> bool:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in _TRUE_VALUES:
-            return True
-        if normalized in _FALSE_VALUES:
-            return False
-        return default
-    return default
 
 
 class ShipyardSandboxProvider:
@@ -116,11 +98,10 @@ class ShipyardSandboxProvider:
         )
         docker_network = str(merged.get("shipyard_docker_network") or "").strip()
         auto_start_raw = merged.get("shipyard_auto_start", None)
-        auto_start_bay = (
-            True
-            if auto_start_raw is None
-            else _coerce_bool(auto_start_raw, default=False)
-        ) and supports_auto_start
+        auto_start_requested = (
+            True if auto_start_raw is None else coerce_bool(auto_start_raw, default=False)
+        )
+        auto_start_bay = auto_start_requested and supports_auto_start
         access_token = str(merged.get("shipyard_access_token", "") or "").strip()
         return {
             "endpoint_url": endpoint_url,
@@ -150,20 +131,9 @@ class ShipyardSandboxProvider:
     ) -> ComputerBooter:
         if self._boot_hook is not None:
             return await self._boot_hook(context, session_id, sandbox_id, config)
-        endpoint_url = str(config.get("endpoint_url") or "").strip()
-        access_token = str(config.get("access_token") or "").strip()
-        if config.get("auto_start_bay"):
-            bay_manager = ShipyardBayContainerManager(
-                endpoint_url=endpoint_url,
-                access_token=access_token,
-                image=str(config.get("bay_image") or BAY_IMAGE),
-                ship_image=str(config.get("ship_image") or DEFAULT_SHIP_IMAGE),
-                docker_network=str(config.get("docker_network") or "").strip(),
-            )
-            try:
-                endpoint_url = await bay_manager.ensure_running()
-            finally:
-                await bay_manager.close_client()
+
+        endpoint_url, access_token = await self._resolve_endpoint_and_token(config)
+
         client = ShipyardBooter(
             endpoint_url=endpoint_url,
             access_token=access_token,
@@ -173,12 +143,31 @@ class ShipyardSandboxProvider:
         await client.boot(uuid.uuid5(uuid.NAMESPACE_DNS, session_id).hex)
         return client
 
+    async def _resolve_endpoint_and_token(self, config: dict) -> tuple[str, str]:
+        endpoint_url = str(config.get("endpoint_url") or "").strip()
+        access_token = str(config.get("access_token") or "").strip()
+
+        if not config.get("auto_start_bay"):
+            return endpoint_url, access_token
+
+        bay_manager = ShipyardBayContainerManager(
+            endpoint_url=endpoint_url,
+            access_token=access_token,
+            image=str(config.get("bay_image") or BAY_IMAGE),
+            ship_image=str(config.get("ship_image") or DEFAULT_SHIP_IMAGE),
+            docker_network=str(config.get("docker_network") or "").strip(),
+        )
+        try:
+            endpoint_url = await bay_manager.ensure_running()
+        finally:
+            await bay_manager.close_client()
+
+        return endpoint_url, access_token
+
     async def destroy_booter(self, booter: ComputerBooter, record: dict) -> None:
         destroy = getattr(booter, "destroy", None)
-        if callable(destroy):
-            try:
-                await destroy()
-            finally:
-                await booter.shutdown()
-        else:
+        if not callable(destroy):
             await booter.shutdown()
+            return
+
+        await destroy()

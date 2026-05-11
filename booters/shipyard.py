@@ -36,40 +36,42 @@ async def _delete_ship_via_api(
                 )
 
 
-def _shell_result_to_payload(value: Any) -> dict[str, Any]:
+def _normalize_shell_result(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
-        return dict(value)
-    if is_dataclass(value) and not isinstance(value, type):
-        return asdict(value)
+        payload: dict[str, Any] = dict(value)
+    elif is_dataclass(value) and not isinstance(value, type):
+        payload = asdict(value)
+    else:
+        payload = {}
+        for method_name in ("model_dump", "dict"):
+            method = getattr(value, method_name, None)
+            if not callable(method):
+                continue
+            try:
+                dumped = method()
+            except Exception:
+                continue
+            if isinstance(dumped, dict):
+                payload = dict(dumped)
+                break
 
-    for method_name in ("model_dump", "dict"):
-        method = getattr(value, method_name, None)
-        if not callable(method):
-            continue
-        try:
-            dumped = method()
-        except Exception:
-            continue
-        if isinstance(dumped, dict):
-            return dict(dumped)
+        if not payload:
+            keys = (
+                "stdout",
+                "stderr",
+                "output",
+                "error",
+                "success",
+                "execution_id",
+                "execution_time_ms",
+                "command",
+                "exit_code",
+                "return_code",
+                "returncode",
+            )
+            payload = {key: getattr(value, key, None) for key in keys}
 
-    keys = (
-        "stdout",
-        "stderr",
-        "output",
-        "error",
-        "success",
-        "execution_id",
-        "execution_time_ms",
-        "command",
-        "exit_code",
-        "return_code",
-        "returncode",
-    )
-    return {key: getattr(value, key, None) for key in keys}
-
-
-def _standardize_shell_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(payload)
     data = payload.get("data")
     if isinstance(data, dict):
         payload = {**payload, **data}
@@ -90,11 +92,6 @@ def _standardize_shell_payload(payload: dict[str, Any]) -> dict[str, Any]:
         payload["exit_code"] = exit_code
 
     return payload
-
-
-def _normalize_shell_result(value: Any) -> dict[str, Any]:
-    payload = _shell_result_to_payload(value)
-    return _standardize_shell_payload(payload)
 
 
 class ShipyardShellWrapper:
@@ -256,6 +253,7 @@ class ShipyardBooter(ComputerBooter):
         self._ttl = ttl
         self._session_num = session_num
         self._failed_boot = False
+        self._is_shutdown = False
 
     async def boot(self, session_id: str) -> None:
         if self._failed_boot:
@@ -276,11 +274,11 @@ class ShipyardBooter(ComputerBooter):
         self._shell = ShipyardShellWrapper(self._ship.shell)
         self._fs = ShipyardFileSystemWrapper(self._ship.fs, self._shell)
 
-    async def shutdown(self) -> None:
-        logger.info("[Computer] Shipyard booter shutdown.")
-        await self._sandbox_client.close()
-
     async def destroy(self) -> None:
+        if self._is_shutdown:
+            return
+        self._is_shutdown = True
+        logger.info("[Computer] Shipyard booter shutdown.")
         ship_id = getattr(getattr(self, "_ship", None), "id", None)
         try:
             if ship_id:
@@ -290,7 +288,10 @@ class ShipyardBooter(ComputerBooter):
                     ship_id,
                 )
         finally:
-            await self.shutdown()
+            await self._sandbox_client.close()
+
+    async def shutdown(self) -> None:
+        await self.destroy()
 
     @property
     def fs(self) -> FileSystemComponent:
