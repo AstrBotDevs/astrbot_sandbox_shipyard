@@ -284,7 +284,19 @@ def test_shipyard_bay_manager_uses_default_ship_network_for_local_host_port():
     assert "DOCKER_NETWORK=shipyard" in env
 
 
-def test_shipyard_bay_manager_mounts_docker_socket_writable():
+def test_shipyard_bay_manager_does_not_mount_docker_socket_by_default():
+    manager = ShipyardBayContainerManager(
+        endpoint_url="http://127.0.0.1:8156",
+        access_token="token",
+    )
+
+    binds = manager._host_config()["Binds"]
+
+    assert "/var/run/docker.sock:/var/run/docker.sock" not in binds
+
+
+def test_shipyard_bay_manager_mounts_docker_socket_when_opted_in(monkeypatch):
+    monkeypatch.setenv("ASTRBOT_BIND_DOCKER_SOCK", "true")
     manager = ShipyardBayContainerManager(
         endpoint_url="http://127.0.0.1:8156",
         access_token="token",
@@ -293,7 +305,6 @@ def test_shipyard_bay_manager_mounts_docker_socket_writable():
     binds = manager._host_config()["Binds"]
 
     assert "/var/run/docker.sock:/var/run/docker.sock" in binds
-    assert "/var/run/docker.sock:/var/run/docker.sock:ro" not in binds
 
 
 def test_shipyard_bay_manager_uses_configured_docker_network():
@@ -472,6 +483,7 @@ async def test_shipyard_booter_rejects_reuse_after_failed_boot(monkeypatch):
 @pytest.mark.asyncio
 async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
     calls = []
+    captured = {}
 
     class FakeResponse:
         status = 200
@@ -496,6 +508,16 @@ async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
             calls.append(("delete", url))
             return FakeResponse()
 
+    class FakeClientSession:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        async def __aenter__(self):
+            return FakeSession()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
     class FakeClient:
         def __init__(self, **kwargs):
             self.endpoint_url = kwargs["endpoint_url"].rstrip("/")
@@ -509,7 +531,7 @@ async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
             calls.append(("close", None))
 
     monkeypatch.setattr(shipyard_booter, "ShipyardClient", FakeClient)
-    monkeypatch.setattr(shipyard_booter.aiohttp, "ClientSession", lambda **kwargs: FakeSession())
+    monkeypatch.setattr(shipyard_booter.aiohttp, "ClientSession", FakeClientSession)
 
     booter = shipyard_booter.ShipyardBooter(
         endpoint_url="http://shipyard:8156/",
@@ -519,7 +541,11 @@ async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
 
     await booter.destroy()
 
-    assert calls == [("delete", "http://shipyard:8156/ship/ship-123")]
+    assert calls == [
+        ("delete", "http://shipyard:8156/ship/ship-123"),
+        ("close", None),
+    ]
+    assert "timeout" in captured
 
 
 @pytest.mark.asyncio

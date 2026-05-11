@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any
 
 import aiodocker
@@ -16,6 +17,12 @@ BAY_LABEL = "astrbot.shipyard.managed"
 BAY_PORT = 8156
 HEALTH_TIMEOUT_S = 60
 HEALTH_POLL_INTERVAL_S = 2
+BIND_DOCKER_SOCK_ENV = "ASTRBOT_BIND_DOCKER_SOCK"
+
+
+def _env_flag(name: str) -> bool:
+    value = os.getenv(name, "").strip().lower()
+    return value in {"1", "true", "yes"}
 
 
 class ShipyardBayContainerManager:
@@ -166,11 +173,11 @@ class ShipyardBayContainerManager:
         return env
 
     def _host_config(self) -> dict[str, Any]:
+        binds: list[str] = ["astrbot_shipyard_bay_data:/app/data"]
+        if _env_flag(BIND_DOCKER_SOCK_ENV):
+            binds.append("/var/run/docker.sock:/var/run/docker.sock")
         config: dict[str, Any] = {
-            "Binds": [
-                "astrbot_shipyard_bay_data:/app/data",
-                "/var/run/docker.sock:/var/run/docker.sock",
-            ],
+            "Binds": binds,
             "RestartPolicy": {"Name": "unless-stopped"},
         }
         if self._docker_network:

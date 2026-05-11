@@ -32,10 +32,23 @@ _SHELL_RESULT_ATTRS: tuple[str, ...] = (
     "execution_time_ms",
     "command",
 )
+_SHIP_DELETE_TIMEOUT_S = 30
 
 
 def _build_shell_payload_from_attrs(value: Any) -> dict[str, Any]:
     return {key: getattr(value, key) for key in _SHELL_RESULT_ATTRS if hasattr(value, key)}
+
+
+async def _delete_ship_via_api(endpoint_url: str, access_token: str, ship_id: str) -> None:
+    headers = {"Authorization": f"Bearer {access_token}"}
+    timeout = aiohttp.ClientTimeout(total=_SHIP_DELETE_TIMEOUT_S)
+    async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+        async with session.delete(f"{endpoint_url}/ship/{ship_id}") as response:
+            if response.status not in {200, 202, 204, 404}:
+                error_text = await response.text()
+                raise RuntimeError(
+                    f"Failed to delete ship: {response.status} {error_text}"
+                )
 
 
 def _normalize_shell_result(value: Any) -> dict[str, Any]:
@@ -273,18 +286,15 @@ class ShipyardBooter(ComputerBooter):
 
     async def destroy(self) -> None:
         ship_id = getattr(getattr(self, "_ship", None), "id", None)
-        if not ship_id:
-            return
-        headers = {"Authorization": f"Bearer {self._sandbox_client.access_token}"}
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.delete(
-                f"{self._sandbox_client.endpoint_url}/ship/{ship_id}"
-            ) as response:
-                if response.status not in {200, 202, 204, 404}:
-                    error_text = await response.text()
-                    raise RuntimeError(
-                        f"Failed to delete ship: {response.status} {error_text}"
-                    )
+        try:
+            if ship_id:
+                await _delete_ship_via_api(
+                    self._sandbox_client.endpoint_url,
+                    self._sandbox_client.access_token,
+                    ship_id,
+                )
+        finally:
+            await self.shutdown()
 
     @property
     def fs(self) -> FileSystemComponent:

@@ -24,17 +24,24 @@ _AUTO_START_ENDPOINTS = {
     ("http", "127.0.0.1", 8156),
     ("http", "localhost", 8156),
 }
+_TRUE_VALUES = {"true", "1", "yes", "y", "on"}
+_FALSE_VALUES = {"false", "0", "no", "n", "off"}
 
 
-def _normalize_endpoint_url(endpoint: str) -> str:
-    parsed = urlparse(endpoint.strip())
+def _normalize_shipyard_endpoint(endpoint: str) -> tuple[str, bool]:
+    raw = (endpoint or "").strip() or DEFAULT_SHIPYARD_ENDPOINT
+    parsed = urlparse(raw)
     if not parsed.scheme or not parsed.hostname:
-        return endpoint.strip().rstrip("/")
+        return raw.rstrip("/"), False
+    try:
+        port = parsed.port
+    except ValueError:
+        return raw.rstrip("/"), False
     netloc = parsed.hostname
-    if parsed.port is not None:
-        netloc = f"{netloc}:{parsed.port}"
+    if port is not None:
+        netloc = f"{netloc}:{port}"
     path = "" if parsed.path == "/" else parsed.path.rstrip("/")
-    return urlunparse(
+    normalized = urlunparse(
         (
             parsed.scheme.lower(),
             netloc,
@@ -44,21 +51,12 @@ def _normalize_endpoint_url(endpoint: str) -> str:
             parsed.fragment,
         )
     )
-
-
-def _endpoint_supports_auto_start(endpoint: str) -> bool:
-    parsed = urlparse(endpoint)
-    if not parsed.scheme or not parsed.hostname:
-        return False
-    try:
-        port = parsed.port
-    except ValueError:
-        return False
-    return (
+    supports_auto_start = (
         parsed.scheme.lower(),
         parsed.hostname.lower(),
         port,
     ) in _AUTO_START_ENDPOINTS
+    return normalized, supports_auto_start
 
 
 def _coerce_bool(value: Any, default: bool = True) -> bool:
@@ -70,17 +68,12 @@ def _coerce_bool(value: Any, default: bool = True) -> bool:
         return bool(value)
     if isinstance(value, str):
         normalized = value.strip().lower()
-        if normalized in {"true", "1", "yes", "y", "on"}:
+        if normalized in _TRUE_VALUES:
             return True
-        if normalized in {"false", "0", "no", "n", "off"}:
+        if normalized in _FALSE_VALUES:
             return False
         return default
     return default
-
-
-def _resolve_shipyard_endpoint(config: Mapping[str, Any]) -> str:
-    endpoint = str(config.get("shipyard_endpoint") or "").strip()
-    return _normalize_endpoint_url(endpoint or DEFAULT_SHIPYARD_ENDPOINT)
 
 
 class ShipyardSandboxProvider:
@@ -116,14 +109,16 @@ class ShipyardSandboxProvider:
 
     def build_create_config(self, context: Context, session_id: str) -> dict:
         merged = self._merged_sandbox_config(context, session_id)
-        endpoint_url = _resolve_shipyard_endpoint(merged)
+        endpoint_url, supports_auto_start = _normalize_shipyard_endpoint(
+            str(merged.get("shipyard_endpoint") or "")
+        )
         docker_network = str(merged.get("shipyard_docker_network") or "").strip()
         auto_start_raw = merged.get("shipyard_auto_start", None)
         auto_start_bay = (
             True
             if auto_start_raw is None
             else _coerce_bool(auto_start_raw, default=False)
-        ) and _endpoint_supports_auto_start(endpoint_url)
+        ) and supports_auto_start
         access_token = str(merged.get("shipyard_access_token", "") or "").strip()
         return {
             "endpoint_url": endpoint_url,
