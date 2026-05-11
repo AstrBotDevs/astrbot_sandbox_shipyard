@@ -683,6 +683,41 @@ async def test_shipyard_shell_wrapper_extracts_stdout_from_object_result():
     assert result["execution_id"] == "exec-123"
 
 
+def test_shipyard_shell_result_to_payload_falls_back_to_attrs():
+    payload = shipyard_booter._shell_result_to_payload(
+        SimpleNamespace(
+            stdout="shipyard-ok",
+            stderr="",
+            exit_code=0,
+            execution_id="exec-123",
+        )
+    )
+
+    assert payload["stdout"] == "shipyard-ok"
+    assert payload["stderr"] == ""
+    assert payload["exit_code"] == 0
+    assert payload["execution_id"] == "exec-123"
+
+
+def test_shipyard_standardize_shell_payload_merges_data_and_aliases():
+    payload = shipyard_booter._standardize_shell_payload(
+        {
+            "success": True,
+            "data": {
+                "stdout": "Hello Shipyard\n",
+                "stderr": "",
+                "return_code": 0,
+                "pid": 122,
+            },
+        }
+    )
+
+    assert payload["stdout"] == "Hello Shipyard\n"
+    assert payload["stderr"] == ""
+    assert payload["exit_code"] == 0
+    assert payload["success"] is True
+
+
 @pytest.mark.asyncio
 async def test_shipyard_shell_wrapper_falls_back_when_dict_method_fails():
     class FakeShellResult:

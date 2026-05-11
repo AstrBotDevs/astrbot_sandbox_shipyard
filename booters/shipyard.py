@@ -36,40 +36,40 @@ async def _delete_ship_via_api(
                 )
 
 
-def _normalize_shell_result(value: Any) -> dict[str, Any]:
+def _shell_result_to_payload(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
-        payload: dict[str, Any] = dict(value)
-    elif is_dataclass(value) and not isinstance(value, type):
-        payload = asdict(value)
-    else:
-        payload = {}
-        for method_name in ("model_dump", "dict"):
-            method = getattr(value, method_name, None)
-            if not callable(method):
-                continue
-            try:
-                dumped = method()
-            except Exception:
-                dumped = None
-            if isinstance(dumped, dict):
-                payload = dict(dumped)
-                break
+        return dict(value)
+    if is_dataclass(value) and not isinstance(value, type):
+        return asdict(value)
 
-        if not payload:
-            payload = {
-                "stdout": getattr(value, "stdout", None),
-                "stderr": getattr(value, "stderr", None),
-                "output": getattr(value, "output", None),
-                "error": getattr(value, "error", None),
-                "success": getattr(value, "success", None),
-                "execution_id": getattr(value, "execution_id", None),
-                "execution_time_ms": getattr(value, "execution_time_ms", None),
-                "command": getattr(value, "command", None),
-                "exit_code": getattr(value, "exit_code", None),
-                "return_code": getattr(value, "return_code", None),
-                "returncode": getattr(value, "returncode", None),
-            }
+    for method_name in ("model_dump", "dict"):
+        method = getattr(value, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            dumped = method()
+        except Exception:
+            continue
+        if isinstance(dumped, dict):
+            return dict(dumped)
 
+    keys = (
+        "stdout",
+        "stderr",
+        "output",
+        "error",
+        "success",
+        "execution_id",
+        "execution_time_ms",
+        "command",
+        "exit_code",
+        "return_code",
+        "returncode",
+    )
+    return {key: getattr(value, key, None) for key in keys}
+
+
+def _standardize_shell_payload(payload: dict[str, Any]) -> dict[str, Any]:
     data = payload.get("data")
     if isinstance(data, dict):
         payload = {**payload, **data}
@@ -90,6 +90,11 @@ def _normalize_shell_result(value: Any) -> dict[str, Any]:
         payload["exit_code"] = exit_code
 
     return payload
+
+
+def _normalize_shell_result(value: Any) -> dict[str, Any]:
+    payload = _shell_result_to_payload(value)
+    return _standardize_shell_payload(payload)
 
 
 class ShipyardShellWrapper:
