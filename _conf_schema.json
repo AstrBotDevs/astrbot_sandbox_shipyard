@@ -2,8 +2,8 @@
   "shipyard_endpoint": {
     "description": "Shipyard API 地址",
     "type": "string",
-    "default": "http://shipyard:8156",
-    "hint": "Shipyard 服务的 API 地址。默认值对应 Docker Compose 部署。"
+    "default": "http://127.0.0.1:8156",
+    "hint": "Shipyard 服务的 API 地址。默认值适合本机直连；如果 AstrBot 运行在 Docker Compose 中，请按实际网络填写。"
   },
   "shipyard_auto_start": {
     "description": "自动启动 Shipyard",

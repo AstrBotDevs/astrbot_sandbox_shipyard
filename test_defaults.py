@@ -50,8 +50,8 @@ def test_shipyard_provider_defaults_to_local_endpoint_when_unconfigured():
     assert config["endpoint_url"] == DEFAULT_SHIPYARD_ENDPOINT
 
 
-def test_shipyard_provider_defaults_match_documented_legacy_endpoint():
-    assert DEFAULT_SHIPYARD_ENDPOINT == "http://shipyard:8156"
+def test_shipyard_provider_defaults_match_documented_local_endpoint():
+    assert DEFAULT_SHIPYARD_ENDPOINT == "http://127.0.0.1:8156"
 
 
 def test_shipyard_provider_enables_auto_start_for_default_endpoint():
@@ -86,7 +86,7 @@ def test_shipyard_provider_uses_docker_network_when_configured():
 
     assert config["auto_start_bay"] is True
     assert config["docker_network"] == "astrbot_network"
-    assert config["endpoint_url"] == "http://shipyard:8156"
+    assert config["endpoint_url"] == "http://127.0.0.1:8156"
 
 
 def test_shipyard_provider_does_not_auto_start_for_explicit_external_endpoint():

@@ -46,10 +46,12 @@ git clone https://github.com/zouyonghe/astrbot_sandbox_shipyard.git data/plugins
 
 | 键名 | 说明 |
 | --- | --- |
-| `shipyard_endpoint` | Shipyard API 地址。 |
+| `shipyard_endpoint` | Shipyard API 地址，默认值为 `http://127.0.0.1:8156`。 |
 | `shipyard_access_token` | Shipyard 访问令牌。 |
 | `shipyard_ttl` | 会话 TTL，单位秒。 |
 | `shipyard_max_sessions` | 最大会话数量。 |
+
+如果 AstrBot 运行在 Docker Compose 中，并且 Bay 服务通过容器名可达，请把 `shipyard_docker_network` 配成对应的 compose 网络，而不是直接使用本机回环地址。
 
 ## 适合场景
 
