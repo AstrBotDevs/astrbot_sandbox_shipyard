@@ -4,6 +4,7 @@ import shlex
 from dataclasses import asdict, is_dataclass
 from typing import Any
 
+import aiohttp
 from shipyard import FileSystemComponent as ShipyardFileSystemComponent
 from shipyard import ShipyardClient, Spec
 
@@ -17,6 +18,24 @@ from astrbot.core.computer.olayer import (
 
 from .shell_background import build_detached_shell_command
 from .shipyard_search_file_util import search_files_via_shell
+
+_SHELL_RESULT_ATTRS: tuple[str, ...] = (
+    "stdout",
+    "stderr",
+    "output",
+    "error",
+    "returncode",
+    "return_code",
+    "exit_code",
+    "success",
+    "execution_id",
+    "execution_time_ms",
+    "command",
+)
+
+
+def _build_shell_payload_from_attrs(value: Any) -> dict[str, Any]:
+    return {key: getattr(value, key) for key in _SHELL_RESULT_ATTRS if hasattr(value, key)}
 
 
 def _normalize_shell_result(value: Any) -> dict[str, Any]:
@@ -32,23 +51,7 @@ def _normalize_shell_result(value: Any) -> dict[str, Any]:
         if isinstance(dumped, dict):
             payload = dict(dumped)
         else:
-            payload = {
-                key: getattr(value, key)
-                for key in (
-                    "stdout",
-                    "stderr",
-                    "output",
-                    "error",
-                    "returncode",
-                    "return_code",
-                    "exit_code",
-                    "success",
-                    "execution_id",
-                    "execution_time_ms",
-                    "command",
-                )
-                if hasattr(value, key)
-            }
+            payload = _build_shell_payload_from_attrs(value)
     elif hasattr(value, "dict"):
         try:
             dumped = value.dict()
@@ -57,41 +60,9 @@ def _normalize_shell_result(value: Any) -> dict[str, Any]:
         if isinstance(dumped, dict):
             payload = dict(dumped)
         else:
-            payload = {
-                key: getattr(value, key)
-                for key in (
-                    "stdout",
-                    "stderr",
-                    "output",
-                    "error",
-                    "returncode",
-                    "return_code",
-                    "exit_code",
-                    "success",
-                    "execution_id",
-                    "execution_time_ms",
-                    "command",
-                )
-                if hasattr(value, key)
-            }
+            payload = _build_shell_payload_from_attrs(value)
     else:
-        payload = {
-            key: getattr(value, key)
-            for key in (
-                "stdout",
-                "stderr",
-                "output",
-                "error",
-                "returncode",
-                "return_code",
-                "exit_code",
-                "success",
-                "execution_id",
-                "execution_time_ms",
-                "command",
-            )
-            if hasattr(value, key)
-        }
+        payload = _build_shell_payload_from_attrs(value)
 
     data = payload.get("data")
     if isinstance(data, dict):
@@ -304,15 +275,16 @@ class ShipyardBooter(ComputerBooter):
         ship_id = getattr(getattr(self, "_ship", None), "id", None)
         if not ship_id:
             return
-        session = await self._sandbox_client._get_session()
-        async with session.delete(
-            f"{self._sandbox_client.endpoint_url}/ship/{ship_id}"
-        ) as response:
-            if response.status not in {200, 202, 204, 404}:
-                error_text = await response.text()
-                raise RuntimeError(
-                    f"Failed to delete ship: {response.status} {error_text}"
-                )
+        headers = {"Authorization": f"Bearer {self._sandbox_client.access_token}"}
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.delete(
+                f"{self._sandbox_client.endpoint_url}/ship/{ship_id}"
+            ) as response:
+                if response.status not in {200, 202, 204, 404}:
+                    error_text = await response.text()
+                    raise RuntimeError(
+                        f"Failed to delete ship: {response.status} {error_text}"
+                    )
 
     @property
     def fs(self) -> FileSystemComponent:

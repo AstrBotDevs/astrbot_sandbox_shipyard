@@ -74,7 +74,8 @@ def _coerce_bool(value: Any, default: bool = True) -> bool:
             return True
         if normalized in {"false", "0", "no", "n", "off"}:
             return False
-    return bool(value)
+        return default
+    return default
 
 
 def _resolve_shipyard_endpoint(config: Mapping[str, Any]) -> str:
@@ -117,8 +118,11 @@ class ShipyardSandboxProvider:
         merged = self._merged_sandbox_config(context, session_id)
         endpoint_url = _resolve_shipyard_endpoint(merged)
         docker_network = str(merged.get("shipyard_docker_network") or "").strip()
-        auto_start_bay = _coerce_bool(
-            merged.get("shipyard_auto_start", True)
+        auto_start_raw = merged.get("shipyard_auto_start", None)
+        auto_start_bay = (
+            True
+            if auto_start_raw is None
+            else _coerce_bool(auto_start_raw, default=False)
         ) and _endpoint_supports_auto_start(endpoint_url)
         access_token = str(merged.get("shipyard_access_token", "") or "").strip()
         return {

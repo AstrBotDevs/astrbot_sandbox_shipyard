@@ -129,6 +129,21 @@ def test_shipyard_provider_disables_auto_start_for_false_string():
     assert config["auto_start_bay"] is False
 
 
+def test_shipyard_provider_disables_auto_start_for_unknown_string():
+    provider = ShipyardSandboxProvider()
+    context = SimpleNamespace(
+        get_config=lambda umo: {
+            "provider_settings": {
+                "sandbox": {"shipyard_auto_start": "maybe"}
+            }
+        }
+    )
+
+    config = provider.build_create_config(context, "dashboard")
+
+    assert config["auto_start_bay"] is False
+
+
 def test_shipyard_provider_strips_endpoint_before_defaulting():
     provider = ShipyardSandboxProvider()
     context = SimpleNamespace(
@@ -471,6 +486,12 @@ async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
             return None
 
     class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
         def delete(self, url):
             calls.append(("delete", url))
             return FakeResponse()
@@ -478,19 +499,17 @@ async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
     class FakeClient:
         def __init__(self, **kwargs):
             self.endpoint_url = kwargs["endpoint_url"].rstrip("/")
+            self.access_token = kwargs["access_token"]
 
         async def create_ship(self, **kwargs):
             del kwargs
             return SimpleNamespace(id="ship-123", shell=None, fs=None, python=None)
 
-        async def _get_session(self):
-            calls.append(("session", None))
-            return FakeSession()
-
         async def close(self):
             calls.append(("close", None))
 
     monkeypatch.setattr(shipyard_booter, "ShipyardClient", FakeClient)
+    monkeypatch.setattr(shipyard_booter.aiohttp, "ClientSession", lambda **kwargs: FakeSession())
 
     booter = shipyard_booter.ShipyardBooter(
         endpoint_url="http://shipyard:8156/",
@@ -500,10 +519,7 @@ async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
 
     await booter.destroy()
 
-    assert calls == [
-        ("session", None),
-        ("delete", "http://shipyard:8156/ship/ship-123"),
-    ]
+    assert calls == [("delete", "http://shipyard:8156/ship/ship-123")]
 
 
 @pytest.mark.asyncio
