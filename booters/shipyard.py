@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import shlex
+from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
+from enum import Enum, auto
 from typing import Any
 
 import aiohttp
@@ -22,6 +24,13 @@ from .shipyard_search_file_util import search_files_via_shell
 _SHIP_DELETE_TIMEOUT_S = 30
 
 
+class _BootState(Enum):
+    NEW = auto()
+    READY = auto()
+    FAILED = auto()
+    DESTROYED = auto()
+
+
 async def _delete_ship_via_api(
     endpoint_url: str, access_token: str, ship_id: str
 ) -> None:
@@ -36,8 +45,8 @@ async def _delete_ship_via_api(
                 )
 
 
-def _to_payload(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
+def _to_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, Mapping):
         return dict(value)
     if is_dataclass(value) and not isinstance(value, type):
         return asdict(value)
@@ -67,31 +76,38 @@ def _to_payload(value: Any) -> dict[str, Any]:
         "returncode",
         "data",
     )
-    return {key: getattr(value, key, None) for key in keys}
+    if any(hasattr(value, key) for key in keys):
+        return {key: getattr(value, key, None) for key in keys}
+
+    return {}
 
 
-def _normalize_shell_result(value: Any) -> dict[str, Any]:
-    payload = _to_payload(value)
-    data = payload.get("data")
+def _normalize_shell_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+    data = normalized.get("data")
     if isinstance(data, dict):
-        payload = {**payload, **data}
+        normalized = {**normalized, **data}
 
-    stdout = payload.get("stdout") or payload.get("output")
-    stderr = payload.get("stderr") or payload.get("error")
+    stdout = normalized.get("stdout") or normalized.get("output")
+    stderr = normalized.get("stderr") or normalized.get("error")
     exit_code = (
-        payload.get("exit_code")
-        if "exit_code" in payload
-        else payload.get("return_code", payload.get("returncode"))
+        normalized["exit_code"]
+        if "exit_code" in normalized
+        else normalized.get("return_code", normalized.get("returncode"))
     )
 
     if stdout is not None:
-        payload["stdout"] = stdout
+        normalized["stdout"] = stdout
     if stderr is not None:
-        payload["stderr"] = stderr
+        normalized["stderr"] = stderr
     if exit_code is not None:
-        payload["exit_code"] = exit_code
+        normalized["exit_code"] = exit_code
 
-    return payload
+    return normalized
+
+
+def _normalize_shell_result(value: Any) -> dict[str, Any]:
+    return _normalize_shell_payload(_to_mapping(value))
 
 
 class ShipyardShellWrapper:
@@ -252,12 +268,13 @@ class ShipyardBooter(ComputerBooter):
         )
         self._ttl = ttl
         self._session_num = session_num
-        self._failed_boot = False
-        self._is_shutdown = False
+        self._state = _BootState.NEW
 
     async def boot(self, session_id: str) -> None:
-        if self._failed_boot:
-            raise RuntimeError("Shipyard booter failed to boot and cannot be reused")
+        if self._state in {_BootState.FAILED, _BootState.DESTROYED}:
+            raise RuntimeError(
+                "Shipyard booter failed to boot or has been shut down and cannot be reused"
+            )
         try:
             ship = await self._sandbox_client.create_ship(
                 ttl=self._ttl,
@@ -266,18 +283,19 @@ class ShipyardBooter(ComputerBooter):
                 session_id=session_id,
             )
         except Exception:
+            self._state = _BootState.FAILED
             await self._sandbox_client.close()
-            self._failed_boot = True
             raise
         logger.info(f"Got sandbox ship: {ship.id} for session: {session_id}")
         self._ship = ship
         self._shell = ShipyardShellWrapper(self._ship.shell)
         self._fs = ShipyardFileSystemWrapper(self._ship.fs, self._shell)
+        self._state = _BootState.READY
 
     async def destroy(self) -> None:
-        if self._is_shutdown:
+        if self._state is _BootState.DESTROYED:
             return
-        self._is_shutdown = True
+        self._state = _BootState.DESTROYED
         logger.info("[Computer] Shipyard booter shutdown.")
         ship_id = getattr(getattr(self, "_ship", None), "id", None)
         try:

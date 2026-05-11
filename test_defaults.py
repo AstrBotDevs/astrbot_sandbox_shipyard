@@ -6,6 +6,7 @@ from data.plugins.astrbot_sandbox_shipyard import main as plugin_main
 from data.plugins.astrbot_sandbox_shipyard import provider as shipyard_provider
 from data.plugins.astrbot_sandbox_shipyard.booters import shipyard as shipyard_booter
 from data.plugins.astrbot_sandbox_shipyard.booters.bay_manager import (
+    BAY_CONTAINER_NAME,
     ShipyardBayContainerManager,
 )
 from data.plugins.astrbot_sandbox_shipyard.booters.shipyard import (
@@ -158,7 +159,8 @@ def test_shipyard_provider_warns_on_malformed_endpoint(monkeypatch):
 
     config = provider.build_create_config(context, "dashboard")
 
-    assert config["auto_start_bay"] is False
+    assert config["endpoint_url"] == DEFAULT_SHIPYARD_ENDPOINT
+    assert config["auto_start_bay"] is True
     assert warnings
 
 
@@ -178,8 +180,8 @@ def test_shipyard_provider_warns_on_endpoint_missing_scheme(monkeypatch):
 
     config = provider.build_create_config(context, "dashboard")
 
-    assert config["endpoint_url"] == "shipyard:8156"
-    assert config["auto_start_bay"] is False
+    assert config["endpoint_url"] == DEFAULT_SHIPYARD_ENDPOINT
+    assert config["auto_start_bay"] is True
     assert warnings
 
 
@@ -199,8 +201,8 @@ def test_shipyard_provider_warns_on_endpoint_missing_host(monkeypatch):
 
     config = provider.build_create_config(context, "dashboard")
 
-    assert config["endpoint_url"] == "http://"
-    assert config["auto_start_bay"] is False
+    assert config["endpoint_url"] == DEFAULT_SHIPYARD_ENDPOINT
+    assert config["auto_start_bay"] is True
     assert warnings
 
 
@@ -430,6 +432,7 @@ def test_shipyard_bay_manager_does_not_mount_docker_socket_by_default():
     binds = manager._host_config()["Binds"]
 
     assert "/var/run/docker.sock:/var/run/docker.sock" not in binds
+    assert any(BAY_CONTAINER_NAME in bind for bind in binds)
 
 
 def test_shipyard_bay_manager_mounts_docker_socket_when_opted_in(monkeypatch):
