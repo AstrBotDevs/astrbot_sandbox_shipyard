@@ -483,6 +483,38 @@ async def test_shipyard_provider_destroy_booter_runs_shutdown_after_destroy():
 
 
 @pytest.mark.asyncio
+async def test_shipyard_provider_closes_bay_client_when_auto_start_fails(monkeypatch):
+    closed = False
+
+    class FakeBayManager:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        async def ensure_running(self):
+            raise RuntimeError("docker unavailable")
+
+        async def close_client(self):
+            nonlocal closed
+            closed = True
+
+    monkeypatch.setattr(
+        "data.plugins.astrbot_sandbox_shipyard.provider.ShipyardBayContainerManager",
+        FakeBayManager,
+    )
+
+    provider = ShipyardSandboxProvider()
+    context = SimpleNamespace(
+        get_config=lambda umo: {"provider_settings": {"sandbox": {}}}
+    )
+    config = provider.build_create_config(context, "session-a")
+
+    with pytest.raises(RuntimeError, match="docker unavailable"):
+        await provider.create_booter(context, "session-a", "shipyard-1", config)
+
+    assert closed is True
+
+
+@pytest.mark.asyncio
 async def test_shipyard_shell_wrapper_extracts_stdout_from_object_result():
     class FakeShell:
         async def exec(self, *args, **kwargs):

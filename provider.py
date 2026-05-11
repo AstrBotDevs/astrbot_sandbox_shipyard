@@ -133,8 +133,10 @@ class ShipyardSandboxProvider:
                 ship_image=str(config.get("ship_image") or DEFAULT_SHIP_IMAGE),
                 docker_network=str(config.get("docker_network") or "").strip(),
             )
-            endpoint_url = await bay_manager.ensure_running()
-            await bay_manager.close_client()
+            try:
+                endpoint_url = await bay_manager.ensure_running()
+            finally:
+                await bay_manager.close_client()
         client = ShipyardBooter(
             endpoint_url=endpoint_url,
             access_token=access_token,
