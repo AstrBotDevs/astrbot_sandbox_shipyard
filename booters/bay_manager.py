@@ -199,7 +199,7 @@ class ShipyardBayContainerManager:
         assert self._docker is not None
         if existing_info is not None:
             container = await self._docker.containers.get(existing_info["Id"])
-            if self._container_env_matches(existing_info, desired_env):
+            if self._container_config_matches(existing_info, desired_env):
                 return container
             logger.info(
                 "[Shipyard] Recreating Bay container because configuration changed"
@@ -234,6 +234,19 @@ class ShipyardBayContainerManager:
             return
         logger.info("[Shipyard] Starting existing Bay container")
         await self._container.start()
+
+    def _container_config_matches(
+        self,
+        container_info: dict[str, Any],
+        desired_env: list[str],
+    ) -> bool:
+        if not self._container_env_matches(container_info, desired_env):
+            return False
+        host_config = container_info.get("HostConfig", {})
+        if self._mode() is _BayMode.NETWORK:
+            return host_config.get("NetworkMode") == self._effective_network()
+        expected_bindings = {f"{BAY_PORT}/tcp": [{"HostPort": str(self._host_port)}]}
+        return host_config.get("PortBindings") == expected_bindings
 
     def _container_env_matches(
         self,
