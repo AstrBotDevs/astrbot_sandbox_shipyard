@@ -46,10 +46,12 @@ Enable sandbox mode in AstrBot and select the `shipyard` sandbox driver:
 
 | Key | Description |
 | --- | --- |
-| `shipyard_endpoint` | Shipyard API endpoint. |
+| `shipyard_endpoint` | Shipyard API endpoint. Defaults to `http://127.0.0.1:8156`. |
 | `shipyard_access_token` | Access token for Shipyard. |
 | `shipyard_ttl` | Session TTL in seconds. |
 | `shipyard_max_sessions` | Maximum number of sessions. |
+
+If AstrBot runs in Docker Compose and the Bay service is reachable by container name, set `shipyard_docker_network` to that compose network instead of using the host loopback default.
 
 ## Best For
 
