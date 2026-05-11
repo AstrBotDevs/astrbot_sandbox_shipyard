@@ -239,6 +239,18 @@ def test_shipyard_bay_manager_uses_default_ship_network_for_local_host_port():
     assert "DOCKER_NETWORK=shipyard" in env
 
 
+def test_shipyard_bay_manager_mounts_docker_socket_writable():
+    manager = ShipyardBayContainerManager(
+        endpoint_url="http://127.0.0.1:8156",
+        access_token="token",
+    )
+
+    binds = manager._host_config()["Binds"]
+
+    assert "/var/run/docker.sock:/var/run/docker.sock" in binds
+    assert "/var/run/docker.sock:/var/run/docker.sock:ro" not in binds
+
+
 def test_shipyard_bay_manager_uses_configured_docker_network():
     manager = ShipyardBayContainerManager(
         endpoint_url="http://shipyard:8156",

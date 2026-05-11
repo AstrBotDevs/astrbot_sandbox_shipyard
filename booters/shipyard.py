@@ -19,48 +19,57 @@ from .shell_background import build_detached_shell_command
 from .shipyard_search_file_util import search_files_via_shell
 
 
-def _maybe_model_dump(value: Any) -> dict[str, Any]:
+def _normalize_shell_result(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
-        return value
-    if is_dataclass(value) and not isinstance(value, type):
-        return asdict(value)
-    if hasattr(value, "model_dump"):
+        payload = dict(value)
+    elif is_dataclass(value) and not isinstance(value, type):
+        payload = asdict(value)
+    elif hasattr(value, "model_dump"):
         dumped = value.model_dump()
-        if isinstance(dumped, dict):
-            return dumped
-    if hasattr(value, "dict"):
+        payload = dict(dumped) if isinstance(dumped, dict) else {}
+    elif hasattr(value, "dict"):
         dumped = value.dict()
-        if isinstance(dumped, dict):
-            return dumped
-    attr_payload = {
-        key: getattr(value, key)
-        for key in (
-            "stdout",
-            "stderr",
-            "output",
-            "error",
-            "returncode",
-            "return_code",
-            "exit_code",
-            "success",
-            "execution_id",
-            "execution_time_ms",
-            "command",
-        )
-        if hasattr(value, key)
-    }
-    if attr_payload:
-        return attr_payload
-    return {}
+        payload = dict(dumped) if isinstance(dumped, dict) else {}
+    else:
+        payload = {
+            key: getattr(value, key)
+            for key in (
+                "stdout",
+                "stderr",
+                "output",
+                "error",
+                "returncode",
+                "return_code",
+                "exit_code",
+                "success",
+                "execution_id",
+                "execution_time_ms",
+                "command",
+            )
+            if hasattr(value, key)
+        }
 
-
-def _normalize_shell_payload(value: Any) -> dict[str, Any]:
-    payload = _maybe_model_dump(value)
     data = payload.get("data")
     if isinstance(data, dict):
         merged = dict(payload)
         merged.update(data)
         payload = merged
+
+    stdout = payload.get("output") if "output" in payload else payload.get("stdout")
+    stderr = payload.get("error") if "error" in payload else payload.get("stderr")
+    exit_code = (
+        payload.get("exit_code")
+        if "exit_code" in payload
+        else payload.get("return_code")
+        if "return_code" in payload
+        else payload.get("returncode")
+    )
+    if stdout is not None:
+        payload["stdout"] = stdout
+    if stderr is not None:
+        payload["stderr"] = stderr
+    if exit_code is not None:
+        payload["exit_code"] = exit_code
     return payload
 
 
@@ -100,15 +109,11 @@ class ShipyardShellWrapper:
             timeout=timeout or 300,
             cwd=cwd,
         )
-        payload = _normalize_shell_payload(result)
+        payload = _normalize_shell_result(result)
 
-        stdout = payload.get("output", payload.get("stdout", "")) or ""
-        stderr = payload.get("error", payload.get("stderr", "")) or ""
+        stdout = payload.get("stdout") or ""
+        stderr = payload.get("stderr") or ""
         exit_code = payload.get("exit_code")
-        if exit_code is None:
-            exit_code = payload.get("return_code")
-        if exit_code is None:
-            exit_code = payload.get("returncode")
         if background:
             pid: int | None = None
             try:

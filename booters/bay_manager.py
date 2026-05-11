@@ -169,7 +169,7 @@ class ShipyardBayContainerManager:
         config: dict[str, Any] = {
             "Binds": [
                 "astrbot_shipyard_bay_data:/app/data",
-                "/var/run/docker.sock:/var/run/docker.sock:ro",
+                "/var/run/docker.sock:/var/run/docker.sock",
             ],
             "RestartPolicy": {"Name": "unless-stopped"},
         }
