@@ -19,6 +19,26 @@ from data.plugins.astrbot_sandbox_shipyard.provider import (
 )
 
 
+def _make_fake_bay_containers(calls):
+    class FakeContainer:
+        async def delete(self, force=False):
+            calls.append(("delete", force))
+
+        async def start(self):
+            calls.append(("start", None))
+
+    class FakeContainers:
+        async def get(self, container_id):
+            calls.append(("get", container_id))
+            return FakeContainer()
+
+        async def create_or_replace(self, name, config):
+            calls.append(("create", name, config["HostConfig"]))
+            return FakeContainer()
+
+    return FakeContainers()
+
+
 def test_shipyard_provider_defaults_to_local_endpoint_when_unconfigured():
     provider = ShipyardSandboxProvider()
     context = SimpleNamespace(
@@ -317,36 +337,13 @@ async def test_shipyard_bay_manager_pulls_ship_image_when_reusing_existing_conta
         async def pull(self, image):
             calls.append(("pull", image))
 
-    class FakeContainers:
-        async def get(self, container_id):
-            calls.append(("get", container_id))
-
-            class FakeContainer:
-                async def delete(self, force=False):
-                    calls.append(("delete", force))
-
-                async def start(self):
-                    calls.append(("start", None))
-
-            return FakeContainer()
-
-        async def create_or_replace(self, name, config):
-            calls.append(("create", name, config["HostConfig"]))
-
-            class FakeContainer:
-                async def delete(self, force=False):
-                    calls.append(("delete", force))
-
-                async def start(self):
-                    calls.append(("start", None))
-
-            return FakeContainer()
-
     manager = ShipyardBayContainerManager(
         endpoint_url="http://shipyard:8156",
         access_token="token",
     )
-    manager._docker = SimpleNamespace(images=FakeImages(), containers=FakeContainers())
+    manager._docker = SimpleNamespace(
+        images=FakeImages(), containers=_make_fake_bay_containers(calls)
+    )
 
     async def fake_open_docker():
         calls.append(("open_docker", None))
@@ -630,23 +627,7 @@ async def test_shipyard_bay_manager_recreates_container_when_host_port_is_stale(
         access_token="token",
     )
 
-    class FakeContainer:
-        async def delete(self, force=False):
-            calls.append(("delete", force))
-
-        async def start(self):
-            calls.append(("start", None))
-
-    class FakeContainers:
-        async def get(self, container_id):
-            calls.append(("get", container_id))
-            return FakeContainer()
-
-        async def create_or_replace(self, name, config):
-            calls.append(("create", name, config["HostConfig"]))
-            return FakeContainer()
-
-    manager._docker = SimpleNamespace(containers=FakeContainers())
+    manager._docker = SimpleNamespace(containers=_make_fake_bay_containers(calls))
 
     async def fake_open_docker():
         calls.append(("open_docker", None))
