@@ -36,42 +36,42 @@ async def _delete_ship_via_api(
                 )
 
 
-def _normalize_shell_result(value: Any) -> dict[str, Any]:
+def _to_payload(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
-        payload: dict[str, Any] = dict(value)
-    elif is_dataclass(value) and not isinstance(value, type):
-        payload = asdict(value)
-    else:
-        payload = {}
-        for method_name in ("model_dump", "dict"):
-            method = getattr(value, method_name, None)
-            if not callable(method):
-                continue
-            try:
-                dumped = method()
-            except Exception:
-                continue
-            if isinstance(dumped, dict):
-                payload = dict(dumped)
-                break
+        return dict(value)
+    if is_dataclass(value) and not isinstance(value, type):
+        return asdict(value)
 
-        if not payload:
-            keys = (
-                "stdout",
-                "stderr",
-                "output",
-                "error",
-                "success",
-                "execution_id",
-                "execution_time_ms",
-                "command",
-                "exit_code",
-                "return_code",
-                "returncode",
-            )
-            payload = {key: getattr(value, key, None) for key in keys}
+    for method_name in ("model_dump", "dict"):
+        method = getattr(value, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            dumped = method()
+        except Exception:
+            continue
+        if isinstance(dumped, dict):
+            return dict(dumped)
 
-    payload = dict(payload)
+    keys = (
+        "stdout",
+        "stderr",
+        "output",
+        "error",
+        "success",
+        "execution_id",
+        "execution_time_ms",
+        "command",
+        "exit_code",
+        "return_code",
+        "returncode",
+        "data",
+    )
+    return {key: getattr(value, key, None) for key in keys}
+
+
+def _normalize_shell_result(value: Any) -> dict[str, Any]:
+    payload = _to_payload(value)
     data = payload.get("data")
     if isinstance(data, dict):
         payload = {**payload, **data}

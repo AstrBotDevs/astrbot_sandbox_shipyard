@@ -99,9 +99,17 @@ class ShipyardSandboxProvider:
         docker_network = str(merged.get("shipyard_docker_network") or "").strip()
         auto_start_raw = merged.get("shipyard_auto_start", None)
         auto_start_requested = (
-            True if auto_start_raw is None else coerce_bool(auto_start_raw, default=False)
+            True
+            if auto_start_raw is None
+            else coerce_bool(auto_start_raw, default=False)
         )
         auto_start_bay = auto_start_requested and supports_auto_start
+        if auto_start_requested and not supports_auto_start:
+            logger.warning(
+                "[Shipyard] Auto-start requested via shipyard_auto_start=%r but endpoint %r does not support auto-start; disabling auto-start.",
+                auto_start_raw,
+                endpoint_url,
+            )
         access_token = str(merged.get("shipyard_access_token", "") or "").strip()
         return {
             "endpoint_url": endpoint_url,

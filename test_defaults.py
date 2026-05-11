@@ -84,6 +84,31 @@ def test_shipyard_provider_does_not_auto_start_for_explicit_external_endpoint():
     assert config["docker_network"] == ""
 
 
+def test_shipyard_provider_warns_when_auto_start_endpoint_is_unsupported(monkeypatch):
+    warnings = []
+
+    def fake_warning(*args, **kwargs):
+        warnings.append((args, kwargs))
+
+    monkeypatch.setattr(shipyard_provider.logger, "warning", fake_warning)
+    provider = ShipyardSandboxProvider()
+    context = SimpleNamespace(
+        get_config=lambda umo: {
+            "provider_settings": {
+                "sandbox": {
+                    "shipyard_endpoint": "http://example.com:8156",
+                    "shipyard_auto_start": "true",
+                }
+            }
+        }
+    )
+
+    config = provider.build_create_config(context, "dashboard")
+
+    assert config["auto_start_bay"] is False
+    assert warnings
+
+
 def test_shipyard_provider_normalizes_local_endpoint_for_auto_start():
     provider = ShipyardSandboxProvider()
     context = SimpleNamespace(
@@ -343,6 +368,57 @@ def test_shipyard_bay_manager_uses_default_ship_network_for_local_host_port():
     env = manager._container_env()
 
     assert "DOCKER_NETWORK=shipyard" in env
+
+
+@pytest.mark.asyncio
+async def test_shipyard_bay_manager_health_timeout_includes_endpoint_and_mode(
+    monkeypatch,
+):
+    class FakeLoop:
+        def __init__(self):
+            self.now = 0.0
+
+        def time(self):
+            self.now += 0.6
+            return self.now
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        def get(self, url, timeout):
+            del url, timeout
+            raise ConnectionError("connection refused")
+
+    async def fake_sleep(delay):
+        del delay
+
+    monkeypatch.setattr(
+        "data.plugins.astrbot_sandbox_shipyard.booters.bay_manager.asyncio.get_running_loop",
+        lambda: FakeLoop(),
+    )
+    monkeypatch.setattr(
+        "data.plugins.astrbot_sandbox_shipyard.booters.bay_manager.asyncio.sleep",
+        fake_sleep,
+    )
+    monkeypatch.setattr(
+        "data.plugins.astrbot_sandbox_shipyard.booters.bay_manager.aiohttp.ClientSession",
+        lambda: FakeSession(),
+    )
+    manager = ShipyardBayContainerManager(
+        endpoint_url="http://127.0.0.1:8156",
+        access_token="token",
+    )
+
+    with pytest.raises(TimeoutError) as exc_info:
+        await manager.wait_healthy(timeout=1)
+
+    message = str(exc_info.value)
+    assert "http://127.0.0.1:8156/health" in message
+    assert "mode=host-port" in message
 
 
 def test_shipyard_bay_manager_does_not_mount_docker_socket_by_default():

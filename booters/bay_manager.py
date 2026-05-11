@@ -107,6 +107,11 @@ class ShipyardBayContainerManager:
             return f"http://shipyard:{BAY_PORT}"
         return f"http://127.0.0.1:{self._host_port}"
 
+    def _health_check_context(self) -> tuple[str, str]:
+        health_url = f"{self._endpoint_url}/health"
+        mode = "network" if self._docker_network else "host-port"
+        return health_url, mode
+
     async def _ensure_docker_network(self) -> None:
         network_name = self._effective_network()
         assert self._docker is not None
@@ -143,19 +148,19 @@ class ShipyardBayContainerManager:
     async def wait_healthy(self, timeout: int = HEALTH_TIMEOUT_S) -> None:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
-        last_error = ""
+        health_url, mode = self._health_check_context()
+        last_error = f"no response received from {health_url} (mode={mode})"
         async with aiohttp.ClientSession() as session:
             while loop.time() < deadline:
                 try:
                     async with session.get(
-                        f"{self._endpoint_url}/health",
-                        timeout=aiohttp.ClientTimeout(total=3),
+                        health_url, timeout=aiohttp.ClientTimeout(total=3)
                     ) as resp:
                         if resp.status == 200:
                             return
                         last_error = f"HTTP {resp.status}"
                 except Exception as exc:
-                    last_error = str(exc)
+                    last_error = f"error querying {health_url} (mode={mode}): {exc!r}"
                 await asyncio.sleep(HEALTH_POLL_INTERVAL_S)
         raise TimeoutError(
             f"Shipyard Bay did not become healthy within {timeout}s (last error: {last_error})"
