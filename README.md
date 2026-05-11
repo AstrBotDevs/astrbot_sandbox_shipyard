@@ -1,26 +1,23 @@
 # astrbot_sandbox_shipyard
 
-Chinese version: [`README_cn.md`](./README_cn.md)
+<div align="center">
 
-`astrbot_sandbox_shipyard` is an AstrBot sandbox runtime plugin that adds the `shipyard` provider through the generic sandbox provider API.
+English ｜ <a href="./README_cn.md">简体中文</a>
 
-It is intended for users who want a classic remote sandbox with shell, Python, and filesystem support.
+</div>
 
-## Features
+`astrbot_sandbox_shipyard` is the Shipyard sandbox driver plugin for AstrBot. It is intended for deployments that already run a Shipyard service and want Agents to execute commands, run Python, and read or write files in a remote sandbox.
 
-- Provides the `shipyard` sandbox runtime for AstrBot.
-- Supports shell, Python, and filesystem operations.
-- Syncs local AstrBot skills into the sandbox when the sandbox boots.
-- Supports configurable session TTL and maximum session count.
+## Key Features
 
-## Requirements
+1. 🛡️ Provides the `shipyard` sandbox driver for AstrBot.
+2. 💻 Supports shell, Python, and file operations.
+3. 📦 Syncs local AstrBot Skills when the sandbox boots.
+4. ⏱️ Supports configurable session TTL and maximum session count.
 
-- An AstrBot build that supports external sandbox provider plugins.
-- The Python dependency from `requirements.txt`: `shipyard-python-sdk`.
-- A reachable Shipyard service endpoint.
-- A valid Shipyard access token.
+## Quick Start
 
-## Installation
+### Install the Plugin
 
 Clone the plugin into AstrBot's plugin directory:
 
@@ -28,11 +25,11 @@ Clone the plugin into AstrBot's plugin directory:
 git clone https://github.com/zouyonghe/astrbot_sandbox_shipyard.git data/plugins/astrbot_sandbox_shipyard
 ```
 
-Then restart AstrBot or reload plugins.
+Then restart AstrBot, or reload plugins from the plugin management page.
 
-## Configuration
+### Enable the Shipyard Sandbox Driver
 
-Enable sandbox runtime in AstrBot and select this provider:
+Enable sandbox mode in AstrBot and select the `shipyard` sandbox driver:
 
 ```json
 {
@@ -45,7 +42,7 @@ Enable sandbox runtime in AstrBot and select this provider:
 }
 ```
 
-Provider-specific options:
+## Configuration
 
 | Key | Description |
 | --- | --- |
@@ -54,14 +51,18 @@ Provider-specific options:
 | `shipyard_ttl` | Session TTL in seconds. |
 | `shipyard_max_sessions` | Maximum number of sessions. |
 
-## Usage Notes
+## Best For
 
-- This plugin is suitable for command execution, Python execution, and file operations in a remote sandbox.
+- This plugin is suitable for remote command execution, Python execution, and file operations.
 - It does not register browser tools or GUI tools.
-- After the plugin is enabled, set `provider_settings.sandbox.booter` to `shipyard` to route AstrBot sandbox requests to this runtime.
+- After the plugin is enabled, set `provider_settings.sandbox.booter` to `shipyard` to route AstrBot sandbox requests to it.
 
-## Limitations
+## Requirements and Limitations
 
+- AstrBot must support external sandbox driver plugins.
+- The Python dependency from `requirements.txt`: `shipyard-python-sdk`.
+- A reachable Shipyard service endpoint is required.
+- A valid Shipyard access token is required.
 - Browser automation is not included.
 - GUI-specific tools such as screenshot, mouse, and keyboard are not included.
 - The runtime depends on an external Shipyard service being healthy and reachable.
