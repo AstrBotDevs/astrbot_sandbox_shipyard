@@ -453,20 +453,7 @@ async def test_shipyard_bay_manager_health_timeout_includes_endpoint_and_mode(
     assert "mode=host-port" in message
 
 
-def test_shipyard_bay_manager_does_not_mount_docker_socket_by_default():
-    manager = ShipyardBayContainerManager(
-        endpoint_url="http://127.0.0.1:8156",
-        access_token="token",
-    )
-
-    binds = manager._host_config()["Binds"]
-
-    assert "/var/run/docker.sock:/var/run/docker.sock" not in binds
-    assert any(BAY_CONTAINER_NAME in bind for bind in binds)
-
-
-def test_shipyard_bay_manager_mounts_docker_socket_when_opted_in(monkeypatch):
-    monkeypatch.setenv("ASTRBOT_BIND_DOCKER_SOCK", "true")
+def test_shipyard_bay_manager_mounts_docker_socket_by_default():
     manager = ShipyardBayContainerManager(
         endpoint_url="http://127.0.0.1:8156",
         access_token="token",
@@ -475,6 +462,19 @@ def test_shipyard_bay_manager_mounts_docker_socket_when_opted_in(monkeypatch):
     binds = manager._host_config()["Binds"]
 
     assert "/var/run/docker.sock:/var/run/docker.sock" in binds
+    assert any(BAY_CONTAINER_NAME in bind for bind in binds)
+
+
+def test_shipyard_bay_manager_can_disable_docker_socket_when_opted_out(monkeypatch):
+    monkeypatch.setenv("ASTRBOT_BIND_DOCKER_SOCK", "false")
+    manager = ShipyardBayContainerManager(
+        endpoint_url="http://127.0.0.1:8156",
+        access_token="token",
+    )
+
+    binds = manager._host_config()["Binds"]
+
+    assert "/var/run/docker.sock:/var/run/docker.sock" not in binds
 
 
 def test_shipyard_bay_manager_uses_configured_docker_network():
@@ -675,6 +675,7 @@ async def test_shipyard_bay_manager_recreates_container_when_host_port_is_stale(
     await manager.ensure_running()
 
     assert ("delete", True) in calls
+    assert ("start", None) in calls
     create_call = next(call for call in calls if call[0] == "create")
     assert create_call[2]["PortBindings"] == {
         f"{BAY_PORT}/tcp": [{"HostPort": str(BAY_PORT)}]
