@@ -8,6 +8,7 @@ from urllib.parse import urlparse, urlunparse
 
 from astrbot.api import logger
 from astrbot.core.computer.booters.base import ComputerBooter
+from astrbot.core.computer.sandbox_timeouts import resolve_sandbox_timeout
 from astrbot.core.star.context import Context
 
 from .booters.bay_manager import (
@@ -20,6 +21,12 @@ from .booters.value_utils import coerce_bool
 
 BootHook = Callable[[Context, str, str, dict], Awaitable[ComputerBooter]]
 DEFAULT_SHIPYARD_ENDPOINT = "http://127.0.0.1:8156"
+_SHIPYARD_TTL_KEY = "sandbox_ttl"
+_SHIPYARD_TTL_ALIASES = ("shipyard_ttl",)
+_SHIPYARD_DEFAULT_TTL_SECONDS = 3600
+_SHIPYARD_IDLE_TIMEOUT_KEY = "sandbox_idle_timeout"
+_SHIPYARD_IDLE_TIMEOUT_ALIASES = ("shipyard_idle_timeout",)
+_SHIPYARD_DEFAULT_IDLE_TIMEOUT_SECONDS = 0.0
 _AUTO_START_ENDPOINTS = {
     # Shipyard service-name endpoints are for Docker network mode;
     # localhost is the host-port default path.
@@ -117,7 +124,12 @@ class ShipyardSandboxProvider:
             "endpoint_url": endpoint_url,
             "access_token": access_token
             or (self._auto_start_access_token if auto_start_bay else ""),
-            "ttl": merged.get("shipyard_ttl", 3600),
+            "ttl": resolve_sandbox_timeout(
+                merged,
+                _SHIPYARD_TTL_KEY,
+                aliases=_SHIPYARD_TTL_ALIASES,
+                default=_SHIPYARD_DEFAULT_TTL_SECONDS,
+            ),
             "session_num": merged.get("shipyard_max_sessions", 10),
             "auto_start_bay": auto_start_bay,
             "docker_network": docker_network,
@@ -134,7 +146,15 @@ class ShipyardSandboxProvider:
         return connect_info
 
     def get_idle_timeout(self, context: Context, session_id: str) -> float:
-        return 0.0
+        merged = self._merged_sandbox_config(context, session_id)
+        return float(
+            resolve_sandbox_timeout(
+                merged,
+                _SHIPYARD_IDLE_TIMEOUT_KEY,
+                aliases=_SHIPYARD_IDLE_TIMEOUT_ALIASES,
+                default=_SHIPYARD_DEFAULT_IDLE_TIMEOUT_SECONDS,
+            )
+        )
 
     async def create_booter(
         self, context: Context, session_id: str, sandbox_id: str, config: dict

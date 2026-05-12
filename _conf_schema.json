@@ -35,12 +35,6 @@
     "default": "",
     "hint": "用于访问 Shipyard 服务的访问令牌。"
   },
-  "shipyard_ttl": {
-    "description": "Shipyard 会话存活时间",
-    "type": "int",
-    "default": 3600,
-    "hint": "Shipyard 会话的生存时间，单位为秒。默认值为 3600。"
-  },
   "shipyard_max_sessions": {
     "description": "Shipyard 最大会话数",
     "type": "int",
