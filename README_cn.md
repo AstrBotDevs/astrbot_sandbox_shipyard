@@ -29,24 +29,22 @@ git clone https://github.com/zouyonghe/astrbot_sandbox_shipyard.git data/plugins
 
 ### 启用 Shipyard 沙盒驱动
 
-先在 AstrBot 核心配置中启用沙盒模式，并把沙盒驱动设置为 `shipyard`：
+在 AstrBot 仪表盘中启用沙盒模式，并选择 `shipyard` 驱动。
 
-```json
-{
-  "provider_settings": {
-    "computer_use_runtime": "sandbox",
-    "sandbox": {
-      "booter": "shipyard"
-    }
-  }
-}
-```
+对应配置路径：
+
+- `provider_settings.computer_use_runtime`：`sandbox`
+- `provider_settings.sandbox.booter`：`shipyard`
 
 ## 配置项
 
 | 键名 | 说明 |
 | --- | --- |
-| `shipyard_endpoint` | Shipyard API 地址，默认值为 `http://127.0.0.1:8156`。 |
+| `shipyard_endpoint` | Shipyard API 地址，默认值为 `http://127.0.0.1:8156`。如果 AstrBot 和 Bay 运行在同一个 Docker 网络里，可以填写容器名或服务名。 |
+| `shipyard_auto_start` | 当本机默认地址不可达时，是否自动用 Docker 拉起 Bay。默认开启。 |
+| `shipyard_docker_network` | 托管 Bay 使用的 Docker 网络名。留空表示宿主机端口模式；填写网络名表示 Docker Compose 网络模式。 |
+| `shipyard_bay_image` | 自动启动 Bay 时使用的镜像，默认是 `soulter/shipyard-bay:latest`。 |
+| `shipyard_ship_image` | Bay 创建沙盒时使用的镜像，默认是 `soulter/shipyard-ship:latest`。 |
 | `shipyard_access_token` | Shipyard 访问令牌。 |
 | `shipyard_ttl` | 会话 TTL，单位秒。 |
 | `shipyard_max_sessions` | 最大会话数量。 |
@@ -69,6 +67,7 @@ git clone https://github.com/zouyonghe/astrbot_sandbox_shipyard.git data/plugins
 - 不包含截图、鼠标、键盘等 GUI 能力。
 - 依赖外部 Shipyard 服务正常运行且可访问。
 
-## 仓库地址
+## 排查建议
 
-- GitHub: https://github.com/zouyonghe/astrbot_sandbox_shipyard
+- 如果自动启动失败，请确认宿主机能访问 Docker，并且默认地址仍然是 `http://127.0.0.1:8156`。
+- 如果使用 Docker Compose，请确认 `shipyard_docker_network` 与实际网络名一致。

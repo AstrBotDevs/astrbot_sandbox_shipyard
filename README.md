@@ -29,24 +29,22 @@ Then restart AstrBot, or reload plugins from the plugin management page.
 
 ### Enable the Shipyard Sandbox Driver
 
-Enable sandbox mode in AstrBot and select the `shipyard` sandbox driver:
+In the AstrBot dashboard, enable sandbox mode and select the `shipyard` driver.
 
-```json
-{
-  "provider_settings": {
-    "computer_use_runtime": "sandbox",
-    "sandbox": {
-      "booter": "shipyard"
-    }
-  }
-}
-```
+Configuration path:
+
+- `provider_settings.computer_use_runtime`: `sandbox`
+- `provider_settings.sandbox.booter`: `shipyard`
 
 ## Configuration
 
 | Key | Description |
 | --- | --- |
-| `shipyard_endpoint` | Shipyard API endpoint. Defaults to `http://127.0.0.1:8156`. |
+| `shipyard_endpoint` | Shipyard API endpoint. Defaults to `http://127.0.0.1:8156`. Use a container or service name when AstrBot and Bay share a Docker network. |
+| `shipyard_auto_start` | Whether AstrBot should start a managed Bay container when the local default endpoint is not reachable. Defaults to `true`. |
+| `shipyard_docker_network` | Docker network name for managed Bay. Leave empty for host-port mode; set a network name for Docker Compose mode. |
+| `shipyard_bay_image` | Bay image used by auto-start. Defaults to `soulter/shipyard-bay:latest`. |
+| `shipyard_ship_image` | Sandbox image created by Bay. Defaults to `soulter/shipyard-ship:latest`. |
 | `shipyard_access_token` | Access token for Shipyard. |
 | `shipyard_ttl` | Session TTL in seconds. |
 | `shipyard_max_sessions` | Maximum number of sessions. |
@@ -69,6 +67,7 @@ If AstrBot runs in Docker Compose and the Bay service is reachable by container 
 - GUI-specific tools such as screenshot, mouse, and keyboard are not included.
 - The runtime depends on an external Shipyard service being healthy and reachable.
 
-## Repository
+## Troubleshooting
 
-- GitHub: https://github.com/zouyonghe/astrbot_sandbox_shipyard
+- If auto-start fails, confirm the host can access Docker and that the default endpoint is still `http://127.0.0.1:8156`.
+- If Docker Compose networking is used, make sure `shipyard_docker_network` matches the actual compose network name.
