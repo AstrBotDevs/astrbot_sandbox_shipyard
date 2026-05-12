@@ -29,8 +29,8 @@ class _BayMode(str, Enum):
     HOST_PORT = "host-port"
 
 
-def _env_flag(name: str) -> bool:
-    return coerce_bool(os.getenv(name), default=True)
+def _env_flag(name: str, *, default: bool = False) -> bool:
+    return coerce_bool(os.getenv(name), default=default)
 
 
 class ShipyardBayContainerManager:
@@ -179,7 +179,7 @@ class ShipyardBayContainerManager:
 
     def _host_config(self) -> dict[str, Any]:
         binds: list[str] = [f"{self._bay_data_volume_name}:/app/data"]
-        if _env_flag(BIND_DOCKER_SOCK_ENV):
+        if _env_flag(BIND_DOCKER_SOCK_ENV, default=True):
             binds.append("/var/run/docker.sock:/var/run/docker.sock")
         config: dict[str, Any] = {
             "Binds": binds,
