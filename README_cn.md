@@ -29,18 +29,12 @@ git clone https://github.com/zouyonghe/astrbot_sandbox_shipyard.git data/plugins
 
 ### 启用 Shipyard 沙盒驱动
 
-先在 AstrBot 核心配置中启用沙盒模式，并把沙盒驱动设置为 `shipyard`：
+在 AstrBot 仪表盘中启用沙盒模式，并选择 `shipyard` 驱动。
 
-```json
-{
-  "provider_settings": {
-    "computer_use_runtime": "sandbox",
-    "sandbox": {
-      "booter": "shipyard"
-    }
-  }
-}
-```
+对应配置路径：
+
+- `provider_settings.computer_use_runtime`：`sandbox`
+- `provider_settings.sandbox.booter`：`shipyard`
 
 ## 配置项
 

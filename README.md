@@ -29,18 +29,12 @@ Then restart AstrBot, or reload plugins from the plugin management page.
 
 ### Enable the Shipyard Sandbox Driver
 
-Enable sandbox mode in AstrBot and select the `shipyard` sandbox driver:
+In the AstrBot dashboard, enable sandbox mode and select the `shipyard` driver.
 
-```json
-{
-  "provider_settings": {
-    "computer_use_runtime": "sandbox",
-    "sandbox": {
-      "booter": "shipyard"
-    }
-  }
-}
-```
+Configuration path:
+
+- `provider_settings.computer_use_runtime`: `sandbox`
+- `provider_settings.sandbox.booter`: `shipyard`
 
 ## Configuration
 
