@@ -21,6 +21,12 @@ from .booters.value_utils import coerce_bool
 
 BootHook = Callable[[Context, str, str, dict], Awaitable[ComputerBooter]]
 DEFAULT_SHIPYARD_ENDPOINT = "http://127.0.0.1:8156"
+_SHIPYARD_TTL_KEY = "sandbox_ttl"
+_SHIPYARD_TTL_ALIASES = ("shipyard_ttl",)
+_SHIPYARD_DEFAULT_TTL_SECONDS = 3600
+_SHIPYARD_IDLE_TIMEOUT_KEY = "sandbox_idle_timeout"
+_SHIPYARD_IDLE_TIMEOUT_ALIASES = ("shipyard_idle_timeout",)
+_SHIPYARD_DEFAULT_IDLE_TIMEOUT_SECONDS = 0.0
 _AUTO_START_ENDPOINTS = {
     # Shipyard service-name endpoints are for Docker network mode;
     # localhost is the host-port default path.
@@ -120,9 +126,9 @@ class ShipyardSandboxProvider:
             or (self._auto_start_access_token if auto_start_bay else ""),
             "ttl": resolve_sandbox_timeout(
                 merged,
-                "sandbox_ttl",
-                aliases=("shipyard_ttl",),
-                default=3600,
+                _SHIPYARD_TTL_KEY,
+                aliases=_SHIPYARD_TTL_ALIASES,
+                default=_SHIPYARD_DEFAULT_TTL_SECONDS,
             ),
             "session_num": merged.get("shipyard_max_sessions", 10),
             "auto_start_bay": auto_start_bay,
@@ -143,9 +149,9 @@ class ShipyardSandboxProvider:
         merged = self._merged_sandbox_config(context, session_id)
         return resolve_sandbox_timeout(
             merged,
-            "sandbox_idle_timeout",
-            aliases=("shipyard_idle_timeout",),
-            default=0.0,
+            _SHIPYARD_IDLE_TIMEOUT_KEY,
+            aliases=_SHIPYARD_IDLE_TIMEOUT_ALIASES,
+            default=_SHIPYARD_DEFAULT_IDLE_TIMEOUT_SECONDS,
         )
 
     async def create_booter(
