@@ -77,7 +77,3 @@ git clone https://github.com/zouyonghe/astrbot_sandbox_shipyard.git data/plugins
 
 - 如果自动启动失败，请确认宿主机能访问 Docker，并且默认地址仍然是 `http://127.0.0.1:8156`。
 - 如果使用 Docker Compose，请确认 `shipyard_docker_network` 与实际网络名一致。
-
-## 仓库地址
-
-- GitHub: https://github.com/zouyonghe/astrbot_sandbox_shipyard

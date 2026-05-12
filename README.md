@@ -77,7 +77,3 @@ If AstrBot runs in Docker Compose and the Bay service is reachable by container 
 
 - If auto-start fails, confirm the host can access Docker and that the default endpoint is still `http://127.0.0.1:8156`.
 - If Docker Compose networking is used, make sure `shipyard_docker_network` matches the actual compose network name.
-
-## Repository
-
-- GitHub: https://github.com/zouyonghe/astrbot_sandbox_shipyard
