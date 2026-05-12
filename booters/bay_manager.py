@@ -30,7 +30,7 @@ class _BayMode(str, Enum):
 
 
 def _env_flag(name: str) -> bool:
-    return coerce_bool(os.getenv(name), default=False)
+    return coerce_bool(os.getenv(name), default=True)
 
 
 class ShipyardBayContainerManager:
