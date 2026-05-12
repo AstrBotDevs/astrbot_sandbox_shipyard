@@ -8,6 +8,7 @@ from urllib.parse import urlparse, urlunparse
 
 from astrbot.api import logger
 from astrbot.core.computer.booters.base import ComputerBooter
+from astrbot.core.computer.sandbox_timeouts import resolve_sandbox_timeout
 from astrbot.core.star.context import Context
 
 from .booters.bay_manager import (
@@ -117,7 +118,12 @@ class ShipyardSandboxProvider:
             "endpoint_url": endpoint_url,
             "access_token": access_token
             or (self._auto_start_access_token if auto_start_bay else ""),
-            "ttl": merged.get("shipyard_ttl", 3600),
+            "ttl": resolve_sandbox_timeout(
+                merged,
+                "sandbox_ttl",
+                aliases=("shipyard_ttl",),
+                default=3600,
+            ),
             "session_num": merged.get("shipyard_max_sessions", 10),
             "auto_start_bay": auto_start_bay,
             "docker_network": docker_network,
@@ -134,7 +140,13 @@ class ShipyardSandboxProvider:
         return connect_info
 
     def get_idle_timeout(self, context: Context, session_id: str) -> float:
-        return 0.0
+        merged = self._merged_sandbox_config(context, session_id)
+        return resolve_sandbox_timeout(
+            merged,
+            "sandbox_idle_timeout",
+            aliases=("shipyard_idle_timeout",),
+            default=0.0,
+        )
 
     async def create_booter(
         self, context: Context, session_id: str, sandbox_id: str, config: dict
