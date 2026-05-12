@@ -70,6 +70,26 @@ def test_shipyard_provider_enables_auto_start_for_default_endpoint():
     assert config["docker_network"] == ""
 
 
+def test_shipyard_provider_auto_starts_with_saved_local_endpoint_without_flag():
+    provider = ShipyardSandboxProvider(
+        plugin_config={
+            "shipyard_endpoint": "http://127.0.0.1:8156",
+            "shipyard_access_token": "buding123",
+            "shipyard_ttl": 3600,
+            "shipyard_max_sessions": 10,
+        }
+    )
+    context = SimpleNamespace(
+        get_config=lambda umo: {"provider_settings": {"sandbox": {}}}
+    )
+
+    config = provider.build_create_config(context, "dashboard")
+
+    assert config["endpoint_url"] == "http://127.0.0.1:8156"
+    assert config["access_token"] == "buding123"
+    assert config["auto_start_bay"] is True
+
+
 def test_shipyard_provider_uses_docker_network_when_configured():
     provider = ShipyardSandboxProvider()
     context = SimpleNamespace(
