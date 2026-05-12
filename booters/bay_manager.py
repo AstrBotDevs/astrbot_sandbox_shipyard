@@ -65,9 +65,11 @@ class ShipyardBayContainerManager:
 
         desired_env = self._container_env()
         existing = await self._find_managed_container()
-        self._container = await self._prepare_container(existing, desired_env)
+        self._container, reused_existing = await self._prepare_container(
+            existing, desired_env
+        )
         self._endpoint_url = self._effective_endpoint()
-        await self._ensure_container_started(existing)
+        await self._ensure_container_started(existing, reused_existing)
         await self.wait_healthy()
         return self._endpoint_url
 
@@ -195,12 +197,12 @@ class ShipyardBayContainerManager:
         self,
         existing_info: dict[str, Any] | None,
         desired_env: list[str],
-    ) -> Any:
+    ) -> tuple[Any, bool]:
         assert self._docker is not None
         if existing_info is not None:
             container = await self._docker.containers.get(existing_info["Id"])
             if self._container_config_matches(existing_info, desired_env):
-                return container
+                return container, True
             logger.info(
                 "[Shipyard] Recreating Bay container because configuration changed"
             )
@@ -222,12 +224,14 @@ class ShipyardBayContainerManager:
         }
         return await self._docker.containers.create_or_replace(
             BAY_CONTAINER_NAME, config
-        )
+        ), False
 
     async def _ensure_container_started(
-        self, existing_info: dict[str, Any] | None
+        self,
+        existing_info: dict[str, Any] | None,
+        reused_existing: bool,
     ) -> None:
-        if existing_info is None:
+        if not reused_existing:
             await self._container.start()
             return
         if existing_info.get("State", {}).get("Running"):

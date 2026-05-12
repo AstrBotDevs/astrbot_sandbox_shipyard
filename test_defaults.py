@@ -675,6 +675,7 @@ async def test_shipyard_bay_manager_recreates_container_when_host_port_is_stale(
     await manager.ensure_running()
 
     assert ("delete", True) in calls
+    assert ("start", None) in calls
     create_call = next(call for call in calls if call[0] == "create")
     assert create_call[2]["PortBindings"] == {
         f"{BAY_PORT}/tcp": [{"HostPort": str(BAY_PORT)}]
