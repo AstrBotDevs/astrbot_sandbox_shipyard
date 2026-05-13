@@ -296,7 +296,7 @@ class ShipyardBooter(ComputerBooter):
         if self._state is _BootState.DESTROYED:
             return
         self._state = _BootState.DESTROYED
-        logger.info("[Computer] Shipyard booter shutdown.")
+        logger.info("[Computer] Shipyard booter destroy.")
         ship_id = getattr(getattr(self, "_ship", None), "id", None)
         try:
             if ship_id:
@@ -309,7 +309,11 @@ class ShipyardBooter(ComputerBooter):
             await self._sandbox_client.close()
 
     async def shutdown(self) -> None:
-        await self.destroy()
+        if self._state is _BootState.DESTROYED:
+            return
+        self._state = _BootState.DESTROYED
+        logger.info("[Computer] Shipyard booter runtime shutdown.")
+        await self._sandbox_client.close()
 
     @property
     def fs(self) -> FileSystemComponent:

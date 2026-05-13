@@ -805,6 +805,66 @@ async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_shipyard_booter_shutdown_only_closes_client(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        status = 200
+
+        async def text(self):
+            return ""
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        def delete(self, url):
+            calls.append(("delete", url))
+            return FakeResponse()
+
+    class FakeClientSession:
+        async def __aenter__(self):
+            return FakeSession()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.endpoint_url = kwargs["endpoint_url"].rstrip("/")
+            self.access_token = kwargs["access_token"]
+
+        async def create_ship(self, **kwargs):
+            del kwargs
+            return SimpleNamespace(id="ship-123", shell=None, fs=None, python=None)
+
+        async def close(self):
+            calls.append(("close", None))
+
+    monkeypatch.setattr(shipyard_booter, "ShipyardClient", FakeClient)
+    monkeypatch.setattr(shipyard_booter.aiohttp, "ClientSession", FakeClientSession)
+
+    booter = shipyard_booter.ShipyardBooter(
+        endpoint_url="http://shipyard:8156/",
+        access_token="token",
+    )
+    await booter.boot("session-a")
+
+    await booter.shutdown()
+
+    assert calls == [("close", None)]
+
+
+@pytest.mark.asyncio
 async def test_shipyard_provider_destroy_booter_uses_destroy_only():
     calls = []
 
