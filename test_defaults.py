@@ -863,6 +863,8 @@ async def test_shipyard_booter_lifecycle_methods_allow_missing_client():
     booter._state = shipyard_booter._BootState.NEW
 
     await booter.shutdown()
+    assert booter._state is shipyard_booter._BootState.SHUTDOWN
+
     await booter.destroy()
 
     assert booter._state is shipyard_booter._BootState.DESTROYED
