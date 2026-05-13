@@ -27,6 +27,7 @@ _SHIP_DELETE_TIMEOUT_S = 30
 class _BootState(Enum):
     NEW = auto()
     READY = auto()
+    SHUTDOWN = auto()
     FAILED = auto()
     DESTROYED = auto()
 
@@ -270,6 +271,9 @@ class ShipyardBooter(ComputerBooter):
         self._session_num = session_num
         self._state = _BootState.NEW
 
+    def _sandbox_client_or_none(self):
+        return getattr(self, "_sandbox_client", None)
+
     async def boot(self, session_id: str) -> None:
         if self._state in {_BootState.FAILED, _BootState.DESTROYED}:
             raise RuntimeError(
@@ -296,20 +300,36 @@ class ShipyardBooter(ComputerBooter):
         if self._state is _BootState.DESTROYED:
             return
         self._state = _BootState.DESTROYED
-        logger.info("[Computer] Shipyard booter shutdown.")
+        logger.info("[Computer] Shipyard booter destroy.")
+        sandbox_client = self._sandbox_client_or_none()
+        if sandbox_client is None:
+            return
         ship_id = getattr(getattr(self, "_ship", None), "id", None)
         try:
             if ship_id:
                 await _delete_ship_via_api(
-                    self._sandbox_client.endpoint_url,
-                    self._sandbox_client.access_token,
+                    sandbox_client.endpoint_url,
+                    sandbox_client.access_token,
                     ship_id,
                 )
         finally:
-            await self._sandbox_client.close()
+            await sandbox_client.close()
 
     async def shutdown(self) -> None:
-        await self.destroy()
+        if self._state in {_BootState.SHUTDOWN, _BootState.DESTROYED}:
+            return
+        sandbox_client = self._sandbox_client_or_none()
+        if sandbox_client is None:
+            self._state = _BootState.SHUTDOWN
+            return
+        prev_state = self._state
+        self._state = _BootState.SHUTDOWN
+        logger.info("[Computer] Shipyard booter runtime shutdown.")
+        try:
+            await sandbox_client.close()
+        except Exception:
+            self._state = prev_state
+            raise
 
     @property
     def fs(self) -> FileSystemComponent:

@@ -39,6 +39,68 @@ def _make_fake_bay_containers(calls):
     return FakeContainers()
 
 
+def _patch_shipyard_api(
+    monkeypatch,
+    *,
+    calls,
+    captured=None,
+    create_ship_result=None,
+    create_ship_error: Exception | None = None,
+):
+    class FakeResponse:
+        status = 200
+
+        async def text(self):
+            return ""
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        def delete(self, url):
+            calls.append(("delete", url))
+            return FakeResponse()
+
+    class FakeClientSession:
+        def __init__(self, **kwargs):
+            if captured is not None:
+                captured.update(kwargs)
+
+        async def __aenter__(self):
+            return FakeSession()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.endpoint_url = kwargs["endpoint_url"].rstrip("/")
+            self.access_token = kwargs["access_token"]
+
+        async def create_ship(self, **kwargs):
+            del kwargs
+            if create_ship_error is not None:
+                raise create_ship_error
+            return create_ship_result or SimpleNamespace(
+                id="ship-123", shell=None, fs=None, python=None
+            )
+
+        async def close(self):
+            calls.append(("close", None))
+
+    monkeypatch.setattr(shipyard_booter, "ShipyardClient", FakeClient)
+    monkeypatch.setattr(shipyard_booter.aiohttp, "ClientSession", FakeClientSession)
+
+
 def test_shipyard_provider_defaults_to_local_endpoint_when_unconfigured():
     provider = ShipyardSandboxProvider()
     context = SimpleNamespace(
@@ -740,54 +802,7 @@ async def test_shipyard_booter_rejects_reuse_after_failed_boot(monkeypatch):
 async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
     calls = []
     captured = {}
-
-    class FakeResponse:
-        status = 200
-
-        async def text(self):
-            return ""
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return None
-
-    class FakeSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return None
-
-        def delete(self, url):
-            calls.append(("delete", url))
-            return FakeResponse()
-
-    class FakeClientSession:
-        def __init__(self, **kwargs):
-            captured.update(kwargs)
-
-        async def __aenter__(self):
-            return FakeSession()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return None
-
-    class FakeClient:
-        def __init__(self, **kwargs):
-            self.endpoint_url = kwargs["endpoint_url"].rstrip("/")
-            self.access_token = kwargs["access_token"]
-
-        async def create_ship(self, **kwargs):
-            del kwargs
-            return SimpleNamespace(id="ship-123", shell=None, fs=None, python=None)
-
-        async def close(self):
-            calls.append(("close", None))
-
-    monkeypatch.setattr(shipyard_booter, "ShipyardClient", FakeClient)
-    monkeypatch.setattr(shipyard_booter.aiohttp, "ClientSession", FakeClientSession)
+    _patch_shipyard_api(monkeypatch, calls=calls, captured=captured)
 
     booter = shipyard_booter.ShipyardBooter(
         endpoint_url="http://shipyard:8156/",
@@ -802,6 +817,60 @@ async def test_shipyard_booter_destroy_deletes_ship(monkeypatch):
         ("close", None),
     ]
     assert "timeout" in captured
+
+
+@pytest.mark.asyncio
+async def test_shipyard_booter_shutdown_only_closes_client(monkeypatch):
+    calls = []
+    _patch_shipyard_api(monkeypatch, calls=calls)
+
+    booter = shipyard_booter.ShipyardBooter(
+        endpoint_url="http://shipyard:8156/",
+        access_token="token",
+    )
+    await booter.boot("session-a")
+
+    await booter.shutdown()
+
+    assert calls == [("close", None)]
+    assert booter._state is shipyard_booter._BootState.SHUTDOWN
+    assert booter._ship.id == "ship-123"
+
+
+@pytest.mark.asyncio
+async def test_shipyard_booter_shutdown_then_destroy_deletes_ship(monkeypatch):
+    calls = []
+    _patch_shipyard_api(monkeypatch, calls=calls)
+
+    booter = shipyard_booter.ShipyardBooter(
+        endpoint_url="http://shipyard:8156/",
+        access_token="token",
+    )
+    await booter.boot("session-a")
+
+    await booter.shutdown()
+    await booter.destroy()
+
+    assert calls == [
+        ("close", None),
+        ("delete", "http://shipyard:8156/ship/ship-123"),
+        ("close", None),
+    ]
+    assert booter._state is shipyard_booter._BootState.DESTROYED
+
+
+@pytest.mark.asyncio
+async def test_shipyard_booter_lifecycle_methods_allow_missing_client():
+    booter = shipyard_booter.ShipyardBooter.__new__(shipyard_booter.ShipyardBooter)
+    booter._sandbox_client = None
+    booter._state = shipyard_booter._BootState.NEW
+
+    await booter.shutdown()
+    assert booter._state is shipyard_booter._BootState.SHUTDOWN
+
+    await booter.destroy()
+
+    assert booter._state is shipyard_booter._BootState.DESTROYED
 
 
 @pytest.mark.asyncio
