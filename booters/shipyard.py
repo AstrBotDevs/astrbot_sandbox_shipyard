@@ -27,6 +27,7 @@ _SHIP_DELETE_TIMEOUT_S = 30
 class _BootState(Enum):
     NEW = auto()
     READY = auto()
+    SHUTDOWN = auto()
     FAILED = auto()
     DESTROYED = auto()
 
@@ -309,9 +310,9 @@ class ShipyardBooter(ComputerBooter):
             await self._sandbox_client.close()
 
     async def shutdown(self) -> None:
-        if self._state is _BootState.DESTROYED:
+        if self._state in {_BootState.SHUTDOWN, _BootState.DESTROYED}:
             return
-        self._state = _BootState.DESTROYED
+        self._state = _BootState.SHUTDOWN
         logger.info("[Computer] Shipyard booter runtime shutdown.")
         await self._sandbox_client.close()
 
