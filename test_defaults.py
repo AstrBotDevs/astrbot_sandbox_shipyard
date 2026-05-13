@@ -833,6 +833,8 @@ async def test_shipyard_booter_shutdown_only_closes_client(monkeypatch):
     await booter.shutdown()
 
     assert calls == [("close", None)]
+    assert booter._state is shipyard_booter._BootState.SHUTDOWN
+    assert booter._ship.id == "ship-123"
 
 
 @pytest.mark.asyncio
@@ -854,6 +856,7 @@ async def test_shipyard_booter_shutdown_then_destroy_deletes_ship(monkeypatch):
         ("delete", "http://shipyard:8156/ship/ship-123"),
         ("close", None),
     ]
+    assert booter._state is shipyard_booter._BootState.DESTROYED
 
 
 @pytest.mark.asyncio

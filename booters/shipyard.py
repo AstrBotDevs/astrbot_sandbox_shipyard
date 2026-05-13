@@ -271,6 +271,9 @@ class ShipyardBooter(ComputerBooter):
         self._session_num = session_num
         self._state = _BootState.NEW
 
+    def _sandbox_client_or_none(self):
+        return getattr(self, "_sandbox_client", None)
+
     async def boot(self, session_id: str) -> None:
         if self._state in {_BootState.FAILED, _BootState.DESTROYED}:
             raise RuntimeError(
@@ -298,7 +301,7 @@ class ShipyardBooter(ComputerBooter):
             return
         self._state = _BootState.DESTROYED
         logger.info("[Computer] Shipyard booter destroy.")
-        sandbox_client = getattr(self, "_sandbox_client", None)
+        sandbox_client = self._sandbox_client_or_none()
         if sandbox_client is None:
             return
         ship_id = getattr(getattr(self, "_ship", None), "id", None)
@@ -315,16 +318,17 @@ class ShipyardBooter(ComputerBooter):
     async def shutdown(self) -> None:
         if self._state in {_BootState.SHUTDOWN, _BootState.DESTROYED}:
             return
-        sandbox_client = getattr(self, "_sandbox_client", None)
+        sandbox_client = self._sandbox_client_or_none()
         if sandbox_client is None:
             self._state = _BootState.SHUTDOWN
             return
+        prev_state = self._state
         self._state = _BootState.SHUTDOWN
         logger.info("[Computer] Shipyard booter runtime shutdown.")
         try:
             await sandbox_client.close()
         except Exception:
-            self._state = _BootState.READY
+            self._state = prev_state
             raise
 
     @property
