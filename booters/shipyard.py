@@ -312,9 +312,9 @@ class ShipyardBooter(ComputerBooter):
     async def shutdown(self) -> None:
         if self._state in {_BootState.SHUTDOWN, _BootState.DESTROYED}:
             return
-        self._state = _BootState.SHUTDOWN
         logger.info("[Computer] Shipyard booter runtime shutdown.")
         await self._sandbox_client.close()
+        self._state = _BootState.SHUTDOWN
 
     @property
     def fs(self) -> FileSystemComponent:
