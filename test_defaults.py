@@ -857,6 +857,18 @@ async def test_shipyard_booter_shutdown_then_destroy_deletes_ship(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_shipyard_booter_lifecycle_methods_allow_missing_client():
+    booter = shipyard_booter.ShipyardBooter.__new__(shipyard_booter.ShipyardBooter)
+    booter._sandbox_client = None
+    booter._state = shipyard_booter._BootState.NEW
+
+    await booter.shutdown()
+    await booter.destroy()
+
+    assert booter._state is shipyard_booter._BootState.DESTROYED
+
+
+@pytest.mark.asyncio
 async def test_shipyard_provider_destroy_booter_uses_destroy_only():
     calls = []
 

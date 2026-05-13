@@ -298,23 +298,34 @@ class ShipyardBooter(ComputerBooter):
             return
         self._state = _BootState.DESTROYED
         logger.info("[Computer] Shipyard booter destroy.")
+        sandbox_client = getattr(self, "_sandbox_client", None)
+        if sandbox_client is None:
+            return
         ship_id = getattr(getattr(self, "_ship", None), "id", None)
         try:
             if ship_id:
                 await _delete_ship_via_api(
-                    self._sandbox_client.endpoint_url,
-                    self._sandbox_client.access_token,
+                    sandbox_client.endpoint_url,
+                    sandbox_client.access_token,
                     ship_id,
                 )
         finally:
-            await self._sandbox_client.close()
+            await sandbox_client.close()
 
     async def shutdown(self) -> None:
         if self._state in {_BootState.SHUTDOWN, _BootState.DESTROYED}:
             return
-        logger.info("[Computer] Shipyard booter runtime shutdown.")
-        await self._sandbox_client.close()
+        sandbox_client = getattr(self, "_sandbox_client", None)
+        if sandbox_client is None:
+            self._state = _BootState.SHUTDOWN
+            return
         self._state = _BootState.SHUTDOWN
+        logger.info("[Computer] Shipyard booter runtime shutdown.")
+        try:
+            await sandbox_client.close()
+        except Exception:
+            self._state = _BootState.READY
+            raise
 
     @property
     def fs(self) -> FileSystemComponent:
