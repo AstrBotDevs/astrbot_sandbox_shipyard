@@ -34,19 +34,16 @@ _AUTO_START_ENDPOINTS = {
     ("http", "127.0.0.1", 8156),
     ("http", "localhost", 8156),
 }
+DOCKER_UNAVAILABLE_ERROR = "Docker is not installed or not running"
 
 
 def _is_docker_unavailable_error(exc: Exception) -> bool:
     detail = str(exc).lower()
-    return any(
-        marker in detail
-        for marker in (
-            "cannot connect to docker engine",
-            "failed to connect to docker daemon",
-            "docker is not installed or not running",
-            "docker daemon",
-            "docker.sock",
-        )
+    return (
+        "cannot connect to docker engine" in detail
+        or "failed to connect to docker daemon" in detail
+        or DOCKER_UNAVAILABLE_ERROR.lower() in detail
+        or ("cannot connect to unix socket" in detail and "docker.sock" in detail)
     )
 
 
@@ -203,9 +200,9 @@ class ShipyardSandboxProvider:
         )
         try:
             endpoint_url = await bay_manager.ensure_running()
-        except Exception as exc:
+        except RuntimeError as exc:
             if _is_docker_unavailable_error(exc):
-                raise RuntimeError("Docker is not installed or not running") from exc
+                raise RuntimeError(DOCKER_UNAVAILABLE_ERROR) from exc
             raise
         finally:
             await bay_manager.close_client()

@@ -882,8 +882,20 @@ async def test_shipyard_provider_shortens_docker_unavailable_errors(monkeypatch)
     )
     config = provider.build_create_config(context, "session-a")
 
-    with pytest.raises(RuntimeError, match="^Docker is not installed or not running$"):
+    with pytest.raises(
+        RuntimeError, match="^Docker is not installed or not running$"
+    ) as excinfo:
         await provider.create_booter(context, "session-a", "shipyard-1", config)
+
+    cause = excinfo.value.__cause__
+    assert isinstance(cause, RuntimeError)
+    assert str(cause).startswith("[900] Cannot connect to Docker Engine via ")
+
+
+def test_shipyard_provider_does_not_overmatch_docker_errors():
+    assert not shipyard_provider._is_docker_unavailable_error(
+        RuntimeError("Failed to create Docker network using /var/run/docker.sock")
+    )
 
 
 @pytest.mark.asyncio
