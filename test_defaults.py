@@ -855,6 +855,38 @@ async def test_shipyard_provider_closes_bay_client_when_auto_start_fails(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_shipyard_provider_shortens_docker_unavailable_errors(monkeypatch):
+    class FakeBayManager:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        async def ensure_running(self):
+            raise RuntimeError(
+                "[900] Cannot connect to Docker Engine via "
+                "unix:///Users/test/.docker/run/docker.sock "
+                "[Cannot connect to unix socket /Users/test/.docker/run/docker.sock "
+                "ssl:default [No such file or directory]]"
+            )
+
+        async def close_client(self):
+            return None
+
+    monkeypatch.setattr(
+        "data.plugins.astrbot_sandbox_shipyard.provider.ShipyardBayContainerManager",
+        FakeBayManager,
+    )
+
+    provider = ShipyardSandboxProvider()
+    context = SimpleNamespace(
+        get_config=lambda umo: {"provider_settings": {"sandbox": {}}}
+    )
+    config = provider.build_create_config(context, "session-a")
+
+    with pytest.raises(RuntimeError, match="^Docker is not installed or not running$"):
+        await provider.create_booter(context, "session-a", "shipyard-1", config)
+
+
+@pytest.mark.asyncio
 async def test_shipyard_shell_wrapper_extracts_stdout_from_object_result():
     class FakeShell:
         async def exec(self, *args, **kwargs):
