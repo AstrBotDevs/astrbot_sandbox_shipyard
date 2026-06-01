@@ -184,10 +184,9 @@ class ShipyardBayContainerManager:
         config: dict[str, Any] = {
             "Binds": binds,
             "RestartPolicy": {"Name": "unless-stopped"},
+            "NetworkMode": self._effective_network(),
         }
-        if self._mode() is _BayMode.NETWORK:
-            config["NetworkMode"] = self._effective_network()
-        else:
+        if self._mode() is _BayMode.HOST_PORT:
             config["PortBindings"] = {
                 f"{BAY_PORT}/tcp": [{"HostPort": str(self._host_port)}]
             }
@@ -250,7 +249,10 @@ class ShipyardBayContainerManager:
         if self._mode() == _BayMode.NETWORK:
             return host_config.get("NetworkMode") == self._effective_network()
         expected_bindings = {f"{BAY_PORT}/tcp": [{"HostPort": str(self._host_port)}]}
-        return host_config.get("PortBindings") == expected_bindings
+        return (
+            host_config.get("NetworkMode") == self._effective_network()
+            and host_config.get("PortBindings") == expected_bindings
+        )
 
     def _container_env_matches(
         self,

@@ -460,8 +460,13 @@ def test_shipyard_bay_manager_uses_default_ship_network_for_local_host_port():
     )
 
     env = manager._container_env()
+    host_config = manager._host_config()
 
     assert "DOCKER_NETWORK=shipyard" in env
+    assert host_config["NetworkMode"] == "shipyard"
+    assert host_config["PortBindings"] == {
+        f"{BAY_PORT}/tcp": [{"HostPort": str(BAY_PORT)}]
+    }
 
 
 @pytest.mark.asyncio
