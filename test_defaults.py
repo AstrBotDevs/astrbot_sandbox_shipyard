@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 import pytest
-
 from data.plugins.astrbot_sandbox_shipyard import main as plugin_main
 from data.plugins.astrbot_sandbox_shipyard import provider as shipyard_provider
 from data.plugins.astrbot_sandbox_shipyard.booters import shipyard as shipyard_booter
@@ -747,6 +746,53 @@ async def test_shipyard_bay_manager_recreates_container_when_host_port_is_stale(
     assert create_call[2]["PortBindings"] == {
         f"{BAY_PORT}/tcp": [{"HostPort": str(BAY_PORT)}]
     }
+    assert ("healthy", "http://127.0.0.1:8156") in calls
+
+
+@pytest.mark.asyncio
+async def test_shipyard_bay_manager_recreates_container_when_network_mode_is_stale(
+    monkeypatch,
+):
+    calls = []
+    manager = ShipyardBayContainerManager(
+        endpoint_url="http://127.0.0.1:8156",
+        access_token="token",
+    )
+
+    manager._docker = SimpleNamespace(containers=_make_fake_bay_containers(calls))
+
+    async def fake_open_docker():
+        calls.append(("open_docker", None))
+
+    async def fake_pull_images():
+        calls.append(("pull", None))
+
+    async def fake_find_container():
+        calls.append(("find", None))
+        return {
+            "Id": "existing",
+            "State": {"Running": True},
+            "Config": {"Env": manager._container_env()},
+            "HostConfig": {
+                "NetworkMode": "bridge",
+                "PortBindings": {f"{BAY_PORT}/tcp": [{"HostPort": str(BAY_PORT)}]},
+            },
+        }
+
+    async def fake_wait_healthy():
+        calls.append(("healthy", manager._endpoint_url))
+
+    monkeypatch.setattr(manager, "_open_docker", fake_open_docker)
+    monkeypatch.setattr(manager, "_pull_required_images", fake_pull_images)
+    monkeypatch.setattr(manager, "_find_managed_container", fake_find_container)
+    monkeypatch.setattr(manager, "wait_healthy", fake_wait_healthy)
+
+    await manager.ensure_running()
+
+    assert ("delete", True) in calls
+    assert ("start", None) in calls
+    create_call = next(call for call in calls if call[0] == "create")
+    assert create_call[2]["NetworkMode"] == "shipyard"
     assert ("healthy", "http://127.0.0.1:8156") in calls
 
 

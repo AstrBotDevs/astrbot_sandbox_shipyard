@@ -246,13 +246,15 @@ class ShipyardBayContainerManager:
         if not self._container_env_matches(container_info, desired_env):
             return False
         host_config = container_info.get("HostConfig", {})
+        return self._host_config_matches(host_config)
+
+    def _host_config_matches(self, host_config: dict[str, Any]) -> bool:
+        expected = self._host_config()
+        if host_config.get("NetworkMode") != expected.get("NetworkMode"):
+            return False
         if self._mode() == _BayMode.NETWORK:
-            return host_config.get("NetworkMode") == self._effective_network()
-        expected_bindings = {f"{BAY_PORT}/tcp": [{"HostPort": str(self._host_port)}]}
-        return (
-            host_config.get("NetworkMode") == self._effective_network()
-            and host_config.get("PortBindings") == expected_bindings
-        )
+            return True
+        return host_config.get("PortBindings") == expected.get("PortBindings")
 
     def _container_env_matches(
         self,
