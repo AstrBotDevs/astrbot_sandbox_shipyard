@@ -365,13 +365,13 @@ class ShipyardBooter(ComputerBooter):
             ship_id = self._ship.id
             data = await self._sandbox_client.get_ship(ship_id)
             if not data:
-                logger.info(
+                logger.debug(
                     "[Computer] Shipyard sandbox health check: id=%s, healthy=False (no data)",
                     ship_id,
                 )
                 return False
             health = bool(data.get("status", 0) == 1)
-            logger.info(
+            logger.debug(
                 "[Computer] Shipyard sandbox health check: id=%s, healthy=%s",
                 ship_id,
                 health,
